@@ -8,27 +8,27 @@ import {
 } from "@remix-run/react";
 import invariant from "tiny-invariant";
 
-import { deleteNote, getNote } from "~/models/note.server";
+import { deleteEssay, getEssay } from "~/models/essay.server";
 import { requireUserId } from "~/session.server";
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const userId = await requireUserId(request);
-  invariant(params.noteId, "noteId not found");
+  invariant(params.noteId, "essayId not found");
 
-  const note = await getNote({ id: params.noteId, userId });
-  if (!note) {
+  const essay = await getEssay({ id: params.essayId, userId });
+  if (!essay) {
     throw new Response("Not Found", { status: 404 });
   }
-  return json({ note });
+  return json({ essay });
 };
 
 export const action = async ({ params, request }: ActionFunctionArgs) => {
   const userId = await requireUserId(request);
-  invariant(params.noteId, "noteId not found");
+  invariant(params.essayId, "essayId not found");
 
-  await deleteNote({ id: params.noteId, userId });
+  await deleteEssay({ id: params.essayId, userId });
 
-  return redirect("/notes");
+  return redirect("/essays");
 };
 
 export default function NoteDetailsPage() {

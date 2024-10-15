@@ -24,7 +24,7 @@ async function seed() {
     },
   });
 
-  await prisma.note.create({
+  await prisma.essay.create({
     data: {
       title: "My first note",
       body: "Hello, world!",
@@ -32,7 +32,7 @@ async function seed() {
     },
   });
 
-  await prisma.note.create({
+  await prisma.essay.create({
     data: {
       title: "My second note",
       body: "Hello, world!",
