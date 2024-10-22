@@ -13,7 +13,7 @@ import { requireUserId } from "~/session.server";
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const userId = await requireUserId(request);
-  invariant(params.noteId, "essayId not found");
+  invariant(params.essayId, "essayId not found");
 
   const essay = await getEssay({ id: params.essayId, userId });
   if (!essay) {
@@ -36,8 +36,8 @@ export default function NoteDetailsPage() {
 
   return (
     <div>
-      <h3 className="text-2xl font-bold">{data.note.title}</h3>
-      <p className="py-6">{data.note.body}</p>
+      <h3 className="text-2xl font-bold">{data.essay.title}</h3>
+      <p className="py-6">{data.essay.body}</p>
       <hr className="my-4" />
       <Form method="post">
         <button
