@@ -1,3 +1,8 @@
+# Model Stack
+* The LLM is hosted through ollama.
+1. `ollama run gemma3:12b-it-qat`
+2. `curl http://localhost:11434/api/generate -d '{"model": "llama2", "prompt":"Why is the sky blue?"}'`
+
 # Remix Blues Stack
 
 ![The Remix Blues Stack](https://repository-images.githubusercontent.com/461012689/37d5bd8b-fa9c-4ab0-893c-f0a199d5012d)
@@ -45,6 +50,7 @@ Click this button to create a [Gitpod](https://gitpod.io) workspace with the pro
 - Initial setup:
 
   ```sh
+  cp .env.example .env
   npm run setup
   ```
 
@@ -209,4 +215,5 @@ This project uses ESLint for linting. That is configured in `.eslintrc.js`.
 ### Formatting
 
 We use [Prettier](https://prettier.io/) for auto-formatting in this project. It's recommended to install an editor plugin (like the [VSCode Prettier plugin](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)) to get auto-formatting on save. There's also a `npm run format` script you can run to format all files in the project.
+
 # scholarships-plus
