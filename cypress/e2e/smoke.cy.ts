@@ -26,7 +26,7 @@ describe("smoke tests", () => {
 
   it("should allow you to make a note", () => {
     const testNote = {
-      title: faker.lorem.words(1),
+      essayPrompt: faker.lorem.words(1),
       body: faker.lorem.sentences(1),
     };
     cy.login();
@@ -37,7 +37,7 @@ describe("smoke tests", () => {
 
     cy.findByRole("link", { name: /\+ new note/i }).click();
 
-    cy.findByRole("textbox", { name: /title/i }).type(testNote.title);
+    cy.findByRole("textbox", { name: /essayPrompt/i }).type(testNote.essayPrompt);
     cy.findByRole("textbox", { name: /body/i }).type(testNote.body);
     cy.findByRole("button", { name: /save/i }).click();
 

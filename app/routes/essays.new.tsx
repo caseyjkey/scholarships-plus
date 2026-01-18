@@ -10,36 +10,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const userId = await requireUserId(request);
 
   const formData = await request.formData();
-  const title = formData.get("title");
+  const essayPrompt = formData.get("essayPrompt");
   const body = formData.get("body");
 
-  if (typeof title !== "string" || title.length === 0) {
+  if (typeof essayPrompt !== "string" || essayPrompt.length === 0) {
     return json(
-      { errors: { body: null, title: "Title is required" } },
+      { errors: { body: null, essayPrompt: "Essay prompt is required" } },
       { status: 400 },
     );
   }
 
   if (typeof body !== "string" || body.length === 0) {
     return json(
-      { errors: { body: "Body is required", title: null } },
+      { errors: { body: "Body is required", essayPrompt: null } },
       { status: 400 },
     );
   }
 
-  const essay = await createEssay({ body, title, userId });
+  const essay = await createEssay({ body, essayPrompt, userId });
 
   return redirect(`/essays/${essay.id}`);
 };
 
 export default function NewNotePage() {
   const actionData = useActionData<typeof action>();
-  const titleRef = useRef<HTMLInputElement>(null);
+  const essayPromptRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (actionData?.errors?.title) {
-      titleRef.current?.focus();
+    if (actionData?.errors?.essayPrompt) {
+      essayPromptRef.current?.focus();
     } else if (actionData?.errors?.body) {
       bodyRef.current?.focus();
     }
@@ -57,20 +57,20 @@ export default function NewNotePage() {
     >
       <div>
         <label className="flex w-full flex-col gap-1">
-          <span>Title: </span>
+          <span>Essay prompt: </span>
           <input
-            ref={titleRef}
-            name="title"
+            ref={essayPromptRef}
+            name="essayPrompt"
             className="flex-1 rounded-md border-2 border-blue-500 px-3 text-lg leading-loose"
-            aria-invalid={actionData?.errors?.title ? true : undefined}
+            aria-invalid={actionData?.errors?.essayPrompt ? true : undefined}
             aria-errormessage={
-              actionData?.errors?.title ? "title-error" : undefined
+              actionData?.errors?.essayPrompt ? "essayPrompt-error" : undefined
             }
           />
         </label>
-        {actionData?.errors?.title ? (
-          <div className="pt-1 text-red-700" id="title-error">
-            {actionData.errors.title}
+        {actionData?.errors?.essayPrompt ? (
+          <div className="pt-1 text-red-700" id="essayPrompt-error">
+            {actionData.errors.essayPrompt}
           </div>
         ) : null}
       </div>

@@ -26,7 +26,7 @@ async function seed() {
 
   await prisma.essay.create({
     data: {
-      title: "My first note",
+      essayPrompt: "My first prompt.",
       body: "Hello, world!",
       userId: user.id,
     },
@@ -34,7 +34,7 @@ async function seed() {
 
   await prisma.essay.create({
     data: {
-      title: "My second note",
+      essayPrompt: "My second prompt.",
       body: "Hello, world!",
       userId: user.id,
     },
