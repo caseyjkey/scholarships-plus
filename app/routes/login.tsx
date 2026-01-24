@@ -10,6 +10,7 @@ import { useEffect, useRef } from "react";
 import { verifyLogin } from "~/models/user.server";
 import { createUserSession, getUserId } from "~/session.server";
 import { safeRedirect, validateEmail } from "~/utils";
+import { GoogleSignInButton } from "~/components/google-sign-in-button";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const userId = await getUserId(request);
@@ -145,6 +146,22 @@ export default function LoginPage() {
           >
             Log in
           </button>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">Or continue with</span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <GoogleSignInButton />
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <input
