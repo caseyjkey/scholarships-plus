@@ -35,14 +35,14 @@ export default function NoteDetailsPage() {
   const data = useLoaderData<typeof loader>();
 
   return (
-    <div>
-      <h3 className="text-2xl font-bold">{data.essay.essayPrompt}</h3>
-      <p className="py-6">{data.essay.body}</p>
+    <div className="px-2 sm:px-0">
+      <h3 className="text-xl sm:text-2xl font-bold">{data.essay.essayPrompt}</h3>
+      <p className="py-6 text-base sm:text-lg">{data.essay.body}</p>
       <hr className="my-4" />
       <Form method="post">
         <button
           type="submit"
-          className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 focus:bg-blue-400"
+          className="rounded bg-blue-500 px-4 py-3 text-white hover:bg-blue-600 focus:bg-blue-400 min-h-[44px]"
         >
           Delete
         </button>

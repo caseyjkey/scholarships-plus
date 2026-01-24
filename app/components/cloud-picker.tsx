@@ -168,7 +168,7 @@ export function CloudPicker({
         type="button"
         onClick={openPicker}
         disabled={buttonDisabled}
-        className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px]"
       >
         <svg className="w-5 h-5" viewBox="0 0 24 24">
           <path
