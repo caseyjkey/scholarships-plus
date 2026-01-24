@@ -14,8 +14,25 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  password Password?
-  essays    Essay[]
+  password          Password?
+  essays            Essay[]
+  googleCredentials GoogleCredential[]
+}
+
+model GoogleCredential {
+  id             String   @id @default(uuid())
+  googleAccountId String  @unique
+  email          String
+  accessToken    String   @db.Text
+  refreshToken   String   @db.Text
+  expiresAt      DateTime
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([googleAccountId])
 }
 
 model Password {
