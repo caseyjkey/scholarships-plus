@@ -1,6 +1,6 @@
 import { prisma } from "~/db.server";
 import { sessionStorage } from "~/session.server";
-import { googleStrategy } from "./google.server";
+import { googleStrategy, type GoogleAuthResult } from "./google.server";
 import {
   findUserByGoogleAccount,
   findUserByEmail,
@@ -18,7 +18,7 @@ authenticator.use(googleStrategy, "google");
 /**
  * Verify and create session after Google OAuth
  */
-export async function verifyGoogleAccount(authResult: any) {
+export async function verifyGoogleAccount(authResult: GoogleAuthResult) {
   const { profile } = authResult;
 
   // 1. Check if Google account already linked
@@ -34,11 +34,8 @@ export async function verifyGoogleAccount(authResult: any) {
     return existingByEmail;
   }
 
-  // 3. Create new user
-  const newUser = await createUser({
-    email: profile.email,
-    password: "", // No password for OAuth-only users
-  });
+  // 3. Create new user (no password for OAuth-only users)
+  const newUser = await createUser(profile.email);
 
   // Link Google account
   await linkGoogleAccount(newUser.id, authResult);
