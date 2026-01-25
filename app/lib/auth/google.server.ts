@@ -68,7 +68,7 @@ export const googleStrategy = new OAuth2Strategy(
       profile,
       tokens: {
         access_token: tokens.accessToken(),
-        refresh_token: tokens.refreshToken(),
+        refresh_token: tokens.refreshToken?.() || undefined,
         expires_in: tokens.expiresAt ? Math.floor((tokens.expiresAt.getTime() - Date.now()) / 1000) : undefined,
         token_type: "Bearer",
       },
