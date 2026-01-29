@@ -258,9 +258,27 @@ function addSparkleIcon(input, fieldName) {
   var img = createSparkleIconElement('#9CA3AF');
   icon.appendChild(img);
 
-  // Set tooltip on hover
-  icon.setAttribute('data-tooltip', mapping.fieldLabel);
-  icon.title = mapping.fieldLabel;
+  // Set tooltip - use help text if available, otherwise field label
+  var helpText = null;
+  var formGroup = input.closest('div, .form-group, .ss-field, [class*="field"]');
+  if (formGroup) {
+    // Look for help text with pattern: text-xs text-gray-500 mt-1 and contains "AI"
+    var helpElements = formGroup.querySelectorAll('div');
+    for (var i = 0; i < helpElements.length; i++) {
+      var el = helpElements[i];
+      var classes = el.className || '';
+      if ((classes.includes('text-xs') || classes.includes('text-gray-500') || classes.includes('hint')) &&
+          el.textContent && el.textContent.includes('AI')) {
+        helpText = el.textContent.trim();
+        // Hide the help text
+        el.style.display = 'none';
+        break;
+      }
+    }
+  }
+
+  icon.setAttribute('data-tooltip', helpText || mapping.fieldLabel);
+  icon.title = helpText || mapping.fieldLabel;
 
   // Track if filled
   var isFilled = false;

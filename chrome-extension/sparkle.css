@@ -5,8 +5,19 @@
   width: 100% !important;
 }
 
-/* For text inputs and textareas - flex for centering */
+/* For text inputs - flex for centering */
 .sp-input-wrapper:has(input:not([type="number"]):not([type="date"]):not([type="month"]):not([type="time"]):not([role="spinbutton"])) {
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* For number/select/date inputs - flex for centering */
+.sp-input-wrapper:has(input[type="number"]),
+.sp-input-wrapper:has(input[type="date"]),
+.sp-input-wrapper:has(input[type="month"]),
+.sp-input-wrapper:has(input[type="time"]),
+.sp-input-wrapper:has(input[role="spinbutton"]),
+.sp-input-wrapper:has(select) {
   display: flex !important;
   align-items: center !important;
 }
@@ -42,28 +53,34 @@
   transform: translateY(-50%) !important;
 }
 
-/* For textareas - top right corner INSIDE textarea bounds */
+/* For textareas - top right corner INSIDE textarea bounds (offset from top edge) */
 .sp-input-wrapper:has(textarea) .sp-sparkle-icon {
   top: 8px !important;
   transform: none !important;
 }
 
-/* For selects - position to avoid dropdown arrow */
+/* For selects - position to avoid dropdown arrow, keep vertical center */
 .sp-input-wrapper:has(select) .sp-sparkle-icon {
   right: 40px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
 }
 
-/* For number inputs - position to avoid spin buttons */
+/* For number inputs - position to avoid spin buttons, keep vertical center */
 .sp-input-wrapper:has(input[type="number"]) .sp-sparkle-icon,
 .sp-input-wrapper:has(input[role="spinbutton"]) .sp-sparkle-icon {
   right: 40px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
 }
 
-/* For date/month/time inputs - position to avoid calendar icon */
+/* For date/month/time inputs - position to avoid calendar icon, keep vertical center */
 .sp-input-wrapper:has(input[type="date"]) .sp-sparkle-icon,
 .sp-input-wrapper:has(input[type="month"]) .sp-sparkle-icon,
 .sp-input-wrapper:has(input[type="time"]) .sp-sparkle-icon {
   right: 40px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
 }
 
 /* Sparkle image */
@@ -86,6 +103,16 @@
 /* For textareas, different hover transform */
 .sp-input-wrapper:has(textarea) .sp-sparkle-icon:hover {
   transform: scale(1.1) !important;
+}
+
+/* For selects/number/date, keep vertical center in hover */
+.sp-input-wrapper:has(select) .sp-sparkle-icon:hover,
+.sp-input-wrapper:has(input[type="number"]) .sp-sparkle-icon:hover,
+.sp-input-wrapper:has(input[role="spinbutton"]) .sp-sparkle-icon:hover,
+.sp-input-wrapper:has(input[type="date"]) .sp-sparkle-icon:hover,
+.sp-input-wrapper:has(input[type="month"]) .sp-sparkle-icon:hover,
+.sp-input-wrapper:has(input[type="time"]) .sp-sparkle-icon:hover {
+  transform: translateY(-50%) scale(1.1) !important;
 }
 
 /* Loading animation - pulse effect */
@@ -138,4 +165,36 @@
     transform: translate(var(--tw-x), var(--tw-y)) scale(0);
     opacity: 0;
   }
+}
+
+/* Tooltip for help text - show on sparkle hover */
+.sp-sparkle-icon[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #1f2937;
+  color: white;
+  font-size: 12px;
+  font-family: system-ui, -apple-system, sans-serif;
+  white-space: nowrap;
+  border-radius: 6px;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Tooltip arrow */
+.sp-sparkle-icon[data-tooltip]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  right: 12px;
+  margin-bottom: 2px;
+  border: 6px solid transparent;
+  border-top-color: #1f2937;
+  z-index: 1000;
+  pointer-events: none;
 }
