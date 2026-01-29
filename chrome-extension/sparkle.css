@@ -1,0 +1,135 @@
+/* Input wrapper for positioning */
+.sp-input-wrapper {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+/* Textarea wrapper - align to top for top-right positioning */
+.sp-input-wrapper:has(textarea) {
+  align-items: flex-start !important;
+}
+
+/* Add right padding to inputs to make room for sparkle */
+.sp-input-wrapper > input:not([type="number"]):not([type="date"]):not([type="month"]):not([type="time"]):not([role="spinbutton"]) {
+  padding-right: 40px !important;
+}
+
+/* For textareas, position sparkle in top right corner */
+.sp-input-wrapper > textarea {
+  padding-right: 40px !important;
+  padding-top: 8px !important;
+}
+
+/* For number inputs and date fields, add padding for native UI */
+.sp-input-wrapper > input[type="number"],
+.sp-input-wrapper > input[type="date"],
+.sp-input-wrapper > input[type="month"],
+.sp-input-wrapper > input[type="time"],
+.sp-input-wrapper > input[role="spinbutton"] {
+  padding-right: 60px !important;
+}
+
+/* For select fields with dropdowns */
+.sp-input-wrapper-with-buttons > select {
+  padding-right: 60px !important;
+}
+
+/* Base sparkle icon styles */
+.sp-sparkle-icon {
+  position: absolute !important;
+  right: 12px !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  max-width: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  overflow: hidden !important;
+  z-index: 10 !important;
+  cursor: pointer !important;
+  transition: transform 0.2s ease !important;
+  pointer-events: auto !important;
+  flex-shrink: 0 !important;
+  display: block !important;
+}
+
+/* For textareas, position in top right corner */
+.sp-input-wrapper:has(textarea) .sp-sparkle-icon {
+  top: 8px !important;
+}
+
+/* Offset sparkle for selects and date fields (avoid native UI) */
+.sp-sparkle-icon-offset {
+  right: 40px !important;
+}
+
+/* Sparkle image */
+.sp-sparkle-icon img {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  max-width: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  display: block !important;
+  object-fit: contain !important;
+}
+
+/* Hover effect */
+.sp-sparkle-icon:hover {
+  transform: scale(1.1) !important;
+}
+
+/* Loading animation */
+.sp-sparkle-icon.sp-sparkle-loading {
+  animation: pulse 0.5s ease-in-out infinite !important;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.1); }
+}
+
+/* Demo banner */
+.sp-demo-banner {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  z-index: 999999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Sparkle burst particles */
+.sp-sparkle-particle {
+  position: fixed !important;
+  pointer-events: none !important;
+  background: #60A5FA !important;
+  border-radius: 50% !important;
+  z-index: 999999 !important;
+  animation: sparkle-burst 0.6s ease-out forwards !important;
+}
+
+@keyframes sparkle-burst {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tw-x), var(--tw-y)) scale(0);
+    opacity: 0;
+  }
+}

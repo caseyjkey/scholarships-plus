@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="sp-container">
+    <div class="sp-header">
+      <h2>✨ Scholarship Assistant</h2>
+      <div class="sp-scholarship-info">
+        <span id="sp-scholarship-name">Loading...</span>
+        <span id="sp-sync-status" class="sp-sync-status"></span>
+      </div>
+    </div>
+
+    <!-- Chat Section -->
+    <div class="sp-chat-section">
+      <div id="sp-chat-container" class="sp-chat-container">
+        <p class="sp-empty">Chat with the assistant to refine your responses or add details you may have forgotten.</p>
+      </div>
+
+      <div class="sp-input-area">
+        <textarea id="sp-user-input" placeholder="Ask about this application or refine responses..." rows="3"></textarea>
+        <button id="sp-send">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

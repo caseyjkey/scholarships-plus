@@ -123,12 +123,23 @@ export function MobileNav({ essayListItems, userEmail, onLogout }: MobileNavProp
                               }`
                             }
                           >
-                            📝 {essay.title}
+                            📝 {essay.essayPrompt}
                           </NavLink>
                         </li>
                       ))}
                     </ul>
                   )}
+                </div>
+
+                {/* Settings */}
+                <div className="py-6">
+                  <Link
+                    to="/settings"
+                    onClick={() => setIsOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 min-h-[44px] flex items-center"
+                  >
+                    ⚙️ Settings
+                  </Link>
                 </div>
 
                 {/* Logout */}
