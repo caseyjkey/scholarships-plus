@@ -1,45 +1,25 @@
-/* Input wrapper for positioning */
+/* Input wrapper for positioning - relative container */
 .sp-input-wrapper {
   position: relative !important;
-  display: flex !important;
-  align-items: center !important;
+  display: block !important;
   width: 100% !important;
 }
 
-/* Textarea wrapper - align to top for top-right positioning */
+/* For text inputs and textareas - flex for centering */
+.sp-input-wrapper:has(input:not([type="number"]):not([type="date"]):not([type="month"]):not([type="time"]):not([role="spinbutton"])) {
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* For textareas - align to top */
 .sp-input-wrapper:has(textarea) {
+  display: flex !important;
   align-items: flex-start !important;
 }
 
-/* Add right padding to inputs to make room for sparkle */
-.sp-input-wrapper > input:not([type="number"]):not([type="date"]):not([type="month"]):not([type="time"]):not([role="spinbutton"]) {
-  padding-right: 40px !important;
-}
-
-/* For textareas, position sparkle in top right corner */
-.sp-input-wrapper > textarea {
-  padding-right: 40px !important;
-  padding-top: 8px !important;
-}
-
-/* For number inputs and date fields, add padding for native UI */
-.sp-input-wrapper > input[type="number"],
-.sp-input-wrapper > input[type="date"],
-.sp-input-wrapper > input[type="month"],
-.sp-input-wrapper > input[type="time"],
-.sp-input-wrapper > input[role="spinbutton"] {
-  padding-right: 60px !important;
-}
-
-/* For select fields with dropdowns */
-.sp-input-wrapper-with-buttons > select {
-  padding-right: 60px !important;
-}
-
-/* Base sparkle icon styles */
+/* Base sparkle icon styles - positioned absolutely, outside normal flow */
 .sp-sparkle-icon {
   position: absolute !important;
-  right: 12px !important;
   width: 20px !important;
   height: 20px !important;
   min-width: 20px !important;
@@ -55,13 +35,34 @@
   display: block !important;
 }
 
-/* For textareas, position in top right corner */
-.sp-input-wrapper:has(textarea) .sp-sparkle-icon {
-  top: 8px !important;
+/* Default positioning - right side, vertically centered */
+.sp-sparkle-icon {
+  right: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
 }
 
-/* Offset sparkle for selects and date fields (avoid native UI) */
-.sp-sparkle-icon-offset {
+/* For textareas - top right corner INSIDE textarea bounds */
+.sp-input-wrapper:has(textarea) .sp-sparkle-icon {
+  top: 8px !important;
+  transform: none !important;
+}
+
+/* For selects - position to avoid dropdown arrow */
+.sp-input-wrapper:has(select) .sp-sparkle-icon {
+  right: 40px !important;
+}
+
+/* For number inputs - position to avoid spin buttons */
+.sp-input-wrapper:has(input[type="number"]) .sp-sparkle-icon,
+.sp-input-wrapper:has(input[role="spinbutton"]) .sp-sparkle-icon {
+  right: 40px !important;
+}
+
+/* For date/month/time inputs - position to avoid calendar icon */
+.sp-input-wrapper:has(input[type="date"]) .sp-sparkle-icon,
+.sp-input-wrapper:has(input[type="month"]) .sp-sparkle-icon,
+.sp-input-wrapper:has(input[type="time"]) .sp-sparkle-icon {
   right: 40px !important;
 }
 
@@ -77,19 +78,24 @@
   object-fit: contain !important;
 }
 
-/* Hover effect */
+/* Hover effect - scale up */
 .sp-sparkle-icon:hover {
+  transform: translateY(-50%) scale(1.1) !important;
+}
+
+/* For textareas, different hover transform */
+.sp-input-wrapper:has(textarea) .sp-sparkle-icon:hover {
   transform: scale(1.1) !important;
 }
 
-/* Loading animation */
+/* Loading animation - pulse effect */
 .sp-sparkle-icon.sp-sparkle-loading {
   animation: pulse 0.5s ease-in-out infinite !important;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.1); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 /* Demo banner */

@@ -279,44 +279,29 @@ function addSparkleIcon(input, fieldName) {
     // Create sparkle burst at viewport coordinates
     createSparkleBurst(centerX, centerY);
 
-    // Update state
+    // Update state - change color to blue (loading)
+    var img = icon.querySelector('img');
     icon.classList.remove('sp-sparkle-grey');
     icon.classList.add('sp-sparkle-loading');
-    icon.innerHTML = '';
-    icon.appendChild(createSparkleIconElement('#60A5FA'));
+    if (img) img.style.filter = 'sepia(1) saturate(3) hue-rotate(180deg) brightness(0.9)';
 
     await fillFieldWithAnimation(input, mapping.approvedValue);
 
     setTimeout(function() {
+      // Change color to green (filled)
       icon.classList.remove('sp-sparkle-loading');
       icon.classList.add('sp-sparkle-filled');
-      icon.innerHTML = '';
-      icon.appendChild(createSparkleIconElement('#10B981'));
+      if (img) img.style.filter = 'sepia(1) saturate(5) hue-rotate(90deg) brightness(0.8)';
       icon.title = '✓ ' + mapping.fieldLabel;
       isFilled = true;
     }, 300);
   });
 
-  // Intelligent positioning based on input type
-  var inputType = (input.type || input.tagName.toLowerCase());
+  // Add wrapper class and append icon - CSS handles positioning based on input type
   var parent = input.parentElement;
-
   if (parent) {
-    // Select elements, number inputs, and date/month inputs need extra offset for native UI
-    var isSelect = inputType === 'select-one' || inputType === 'select';
-    var isNumberInput = inputType === 'number';
-    var isDateInput = inputType === 'date' || inputType === 'month' || inputType === 'time';
-
-    if (isSelect || isNumberInput || isDateInput) {
-      // For selects, number inputs, and date inputs, position further left to avoid native UI
-      icon.classList.add('sp-sparkle-icon-offset');
-      parent.classList.add('sp-input-wrapper', 'sp-input-wrapper-with-buttons');
-      parent.appendChild(icon);
-    } else {
-      // For regular inputs and textareas
-      parent.classList.add('sp-input-wrapper');
-      parent.appendChild(icon);
-    }
+    parent.classList.add('sp-input-wrapper');
+    parent.appendChild(icon);
   }
 }
 
