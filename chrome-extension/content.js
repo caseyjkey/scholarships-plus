@@ -26,7 +26,7 @@ console.log('Scholarships Plus: Content script START');
 })();
 
 // Signal to page that extension is loaded
-var event = new CustomEvent('scholarshipsPlusExtensionLoaded', { detail: { version: '0.3.3' } });
+var event = new CustomEvent('scholarshipsPlusExtensionLoaded', { detail: { version: '0.3.5' } });
 window.dispatchEvent(event);
 console.log('Scholarships Plus: Extension detection event dispatched');
 
@@ -210,47 +210,48 @@ function findLabelForElement(element) {
     }
   }
 
-  // STEP 3: Proximity Search - find nearest label with meaningful text
+  // STEP 3: DOM-tree-based Proximity Search
+  // Find label in same or parent container (more robust than viewport coordinates)
   if (!label) {
-    var allLabels = Array.from(document.querySelectorAll('label'));
-    var elementRect = element.getBoundingClientRect();
-    var bestLabel = null;
-    var bestDistance = Infinity;
-    var bestTextLength = 0;
+    var container = element.closest('article, section, div.field, div.form-group, .question');
+    var searchRoot = container || document.body;
 
-    allLabels.forEach(function(lbl) {
-      var lblRect = lbl.getBoundingClientRect();
-      var distance = Math.abs(elementRect.top - lblRect.bottom) + Math.abs(elementRect.left - lblRect.left);
+    // First, try to find a label in a header within the same container
+    var header = searchRoot.querySelector('header label, .question-label, .field-label, .label');
+    if (header && header.textContent.trim().length > 5) {
+      label = header;
+      source = 'container-header';
+    }
 
-      // Only consider labels within reasonable distance (300px)
-      if (distance > 300) return;
+    // If no header label, look for the first meaningful label in the container
+    if (!label) {
+      var containerLabels = Array.from(searchRoot.querySelectorAll('label'));
+      var bestLabel = null;
+      var bestTextLength = 0;
 
-      var textLength = lbl.textContent.trim().length;
+      containerLabels.forEach(function(lbl) {
+        var textLength = lbl.textContent.trim().length;
 
-      // Skip very short labels or empty labels
-      if (textLength < 5) return;
+        // Skip very short labels
+        if (textLength < 5) return;
 
-      // Skip labels that contain radio/checkbox inputs (option labels)
-      if (lbl.querySelector('input[type="radio"], input[type="checkbox"]')) return;
+        // Skip labels that contain radio/checkbox inputs (option labels)
+        if (lbl.querySelector('input[type="radio"], input[type="checkbox"]')) return;
 
-      // Prefer labels that are above the element (typical form layout)
-      var isAbove = lblRect.bottom <= elementRect.top;
-      var adjustedDistance = isAbove ? distance : distance * 1.5;
+        // Skip labels that are inside other labels (nested option labels)
+        if (lbl.closest('label') !== null) return;
 
-      // Prefer longer labels (more likely to be field labels vs option labels)
-      if (textLength > 20) adjustedDistance *= 0.8;
+        // Prefer longer labels (more likely to be field labels vs option labels)
+        if (textLength > bestTextLength) {
+          bestTextLength = textLength;
+          bestLabel = lbl;
+        }
+      });
 
-      if (adjustedDistance < bestDistance ||
-          (adjustedDistance === bestDistance && textLength > bestTextLength)) {
-        bestDistance = adjustedDistance;
-        bestLabel = lbl;
-        bestTextLength = textLength;
+      if (bestLabel) {
+        label = bestLabel;
+        source = 'container-label';
       }
-    });
-
-    if (bestLabel) {
-      label = bestLabel;
-      source = 'proximity';
     }
   }
 
@@ -310,9 +311,18 @@ function extractAllFields() {
   elements.forEach(function(element) {
     if (element.hasAttribute('data-sparkle-added')) return;
 
-    // Skip hidden/offscreen elements
+    // Skip Select2 auto-generated inputs
+    var elemId = element.id || '';
+    var elemName = element.name || '';
+    if (elemId.indexOf('s2id_') === 0 || elemName.indexOf('s2id_') === 0) {
+      return;
+    }
+
+    // Skip hidden/offscreen elements - but use offsetWidth/offsetHeight for more reliable check
+    // Also check if element is in a container with a label (for hidden selects)
     var rect = element.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+    var isInVisibleContainer = element.closest('article, section, div.field, div.form-group, .question');
+    if ((rect.width === 0 || rect.height === 0) && !isInVisibleContainer) return;
 
     // Handle radio button groups - only process the first radio button in each group
     if (element.type === 'radio') {
@@ -1311,7 +1321,8 @@ function init() {
     return;
   }
 
-  setTimeout(processFields, 500);
+  // Wait longer for dynamic content (like Select2) to finish rendering
+  setTimeout(processFields, 1500);
 }
 
 try {
