@@ -9,24 +9,23 @@ console.log('Scholarships Plus: Content script START');
 (function injectSparkleCSS() {
   var style = document.createElement('style');
   style.id = 'scholarships-plus-sparkle-css';
-  style.textContent = `.sp-sparkle-wrapper{position:relative!important;display:inline-flex!important;align-items:center!important;vertical-align:middle!important;margin-left:6px!important}
-.sp-sparkle-icon{position:relative!important;width:20px!important;height:20px!important;min-width:20px!important;max-width:20px!important;min-height:20px!important;max-height:20px!important;z-index:999999!important;cursor:pointer!important;transition:transform .3s cubic-bezier(.4,0,.2,1),opacity .3s ease,filter .3s ease!important;pointer-events:auto!important;flex-shrink:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;vertical-align:middle!important;margin-left:10px!important;line-height:1!important;opacity:0.6!important;transform:translateY(-2px)!important;transform-box:fill-box!important;transform-origin:center!important;filter:grayscale(100%) brightness(0.7)!important}
-.sp-sparkle-icon:hover{transform:translateY(-2px) scale(1.4)!important;filter:grayscale(100%) brightness(0.7)!important;opacity:1!important}
-.sp-sparkle-icon span,.sp-sparkle-icon img{width:20px!important;height:20px!important;display:block!important;min-width:20px!important;max-width:20px!important;min-height:20px!important;max-height:20px!important;object-fit:contain!important;transform-box:fill-box!important;transform-origin:center!important}
+  style.textContent = `
+.sp-sparkle-icon{position:relative!important;width:20px!important;height:20px!important;min-width:20px!important;max-width:20px!important;min-height:20px!important;max-height:20px!important;z-index:999999!important;cursor:pointer!important;transition:transform .3s cubic-bezier(.4,0,.2,1),opacity .3s ease,filter .3s ease!important;pointer-events:auto!important;flex-shrink:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;vertical-align:middle!important;margin-left:6px!important;line-height:1!important;opacity:0.6!important;transform-origin:center center!important;filter:grayscale(100%) brightness(0.7)!important}
+.sp-sparkle-icon:hover{transform:scale(1.2) rotate(15deg)!important;filter:grayscale(100%) brightness(0.7)!important;opacity:1!important}
+.sp-sparkle-icon span,.sp-sparkle-icon img{width:20px!important;height:20px!important;display:block!important;min-width:20px!important;min-height:20px!important;max-width:20px!important;max-height:20px!important;object-fit:contain!important;transform-origin:center center!important}
 .sp-sparkle-icon.sp-sparkle-ready{filter:grayscale(0%) brightness(1) saturate(1)!important;opacity:1!important}
-.sp-sparkle-icon.sp-sparkle-ready:hover{transform:translateY(-2px) scale(1.4)!important;filter:grayscale(0%) drop-shadow(0 0 8px rgba(59,130,246,.8)) drop-shadow(0 0 16px rgba(59,130,246,.4))!important;opacity:1!important}
+.sp-sparkle-icon.sp-sparkle-ready:hover{transform:scale(1.2) rotate(15deg)!important;filter:grayscale(0%) drop-shadow(0 0 8px rgba(59,130,246,.8)) drop-shadow(0 0 16px rgba(59,130,246,.4))!important;opacity:1!important}
 .sp-sparkle-icon.sp-sparkle-filled{filter:grayscale(100%) brightness(0.7) hue-rotate(90deg) saturate(3)!important;opacity:1!important}
 .sp-sparkle-icon.sp-sparkle-generating{animation:pulse 1s ease-in-out infinite!important}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
-.sp-tooltip{position:absolute!important;bottom:calc(100% + 8px)!important;left:50%!important;transform:translateX(-50%)!important;padding:6px 10px!important;background:rgba(31,41,55,.95)!important;color:#fff!important;font-size:11px!important;font-family:system-ui,-apple-system,sans-serif!important;white-space:nowrap!important;border-radius:4px!important;z-index:9999999!important;pointer-events:none!important;opacity:0!important;transition:opacity .2s ease!important;max-width:200px!important;text-align:center!important;line-height:1.3!important}
-.sp-sparkle-icon:hover .sp-tooltip{opacity:1!important}
-`;
+.sp-sparkle-icon[data-tooltip]:hover::after{content:attr(data-tooltip)!important;position:absolute!important;bottom:100%!important;left:50%!important;transform:translateX(-50%)!important;margin-bottom:8px!important;padding:8px 12px!important;background:#1f2937!important;color:#fff!important;font-size:12px!important;font-family:system-ui,-apple-system,sans-serif!important;white-space:nowrap!important;border-radius:6px!important;z-index:999999!important;pointer-events:none!important;box-shadow:0 4px 12px rgba(0,0,0,.15)!important}
+  `;
   document.head.appendChild(style);
   console.log('Scholarships Plus: CSS injected directly');
 })();
 
 // Signal to page that extension is loaded
-var event = new CustomEvent('scholarshipsPlusExtensionLoaded', { detail: { version: '0.3.3' } });
+var event = new CustomEvent('scholarshipsPlusExtensionLoaded', { detail: { version: '0.2.8' } });
 window.dispatchEvent(event);
 console.log('Scholarships Plus: Extension detection event dispatched');
 
@@ -577,11 +576,7 @@ function addSparkleIcon(input, fieldName, labelElement) {
     tooltipText = 'Click to edit';
   }
 
-  // Create separate tooltip element (doesn't rotate with sparkle)
-  var tooltip = document.createElement('div');
-  tooltip.className = 'sp-tooltip';
-  tooltip.textContent = tooltipText;
-  icon.appendChild(tooltip);
+  icon.setAttribute('data-tooltip', tooltipText);
   icon.title = tooltipText;
 
   icon.addEventListener('click', function(e) {
@@ -668,11 +663,7 @@ function updateSparkleState(fieldName, isGenerating) {
     if (img) {
       img.style.filter = 'sepia(1) saturate(3) hue-rotate(180deg) brightness(0.9)';
     }
-    // Update tooltip
-    var tooltip = icon.querySelector('.sp-tooltip');
-    if (tooltip) {
-      tooltip.textContent = 'Generating response...';
-    }
+    icon.setAttribute('data-tooltip', 'Generating response...');
     icon.title = 'Generating response...';
     input._sparkleState = 'generating';
   }
@@ -690,11 +681,7 @@ function transitionToFilled(input) {
   icon.classList.remove('sp-sparkle-empty', 'sp-sparkle-generating', 'sp-sparkle-ready');
   icon.classList.add('sp-sparkle-filled');
   img.style.filter = 'grayscale(100%) brightness(0.7)';
-  // Update tooltip
-  var tooltip = icon.querySelector('.sp-tooltip');
-  if (tooltip) {
-    tooltip.textContent = 'Click to edit';
-  }
+  icon.setAttribute('data-tooltip', 'Click to edit');
   icon.title = 'Click to edit';
   input._sparkleState = 'filled';
 }

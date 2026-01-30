@@ -6,7 +6,7 @@
 console.log('Scholarships Plus: Background service worker loaded!');
 
 const CONFIG = {
-  apiBaseUrl: 'http://localhost:3030',
+  apiBaseUrl: 'https://localhost:3443',
 };
 
 // Handle extension install
@@ -46,9 +46,9 @@ async function handleAuthentication(sendResponse) {
       return;
     }
 
-    // Open login page in new tab
+    // Open extension auth page in new tab
     await chrome.tabs.create({
-      url: `${CONFIG.apiBaseUrl}/login?extension=true`,
+      url: `${CONFIG.apiBaseUrl}/extension/auth`,
       active: true
     });
 
@@ -83,15 +83,15 @@ async function storeAuthToken(token, user) {
   console.log('Scholarships Plus: Auth token stored');
 }
 
-// Listen for tab updates to detect successful login
+// Listen for tab updates to detect extension auth page
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
-    // Check if this is a login page with extension=true
-    if (tab.url.includes('localhost:3030') && tab.url.includes('extension=true')) {
-      // Inject a script to check if user is logged in and get the token
+    // Check if this is the extension auth page
+    if (tab.url.includes('/extension/auth')) {
+      // Inject a script to get the token from window.extensionAuthData
       chrome.scripting.executeScript({
         target: { tabId: tabId },
-        func: checkLoginAndToken
+        func: getExtensionAuthToken
       }, (results) => {
         if (results && results[0] && results[0].result) {
           const { token, user } = results[0].result;
@@ -110,21 +110,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 /**
- * Function to be injected in login page to check authentication
+ * Function to be injected in extension auth page to get token
  */
-function checkLoginAndToken() {
-  // Try to call the API to get token
-  return fetch('/api/extension/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include'
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.token && data.user) {
-      return { token: data.token, user: data.user };
-    }
-    return null;
-  })
-  .catch(() => null);
+function getExtensionAuthToken() {
+  // Read token from window.extensionAuthData (set by the page)
+  if (window.extensionAuthData && window.extensionAuthData.token && window.extensionAuthData.user) {
+    return {
+      token: window.extensionAuthData.token,
+      user: window.extensionAuthData.user
+    };
+  }
+  return null;
 }

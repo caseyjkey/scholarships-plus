@@ -2,10 +2,55 @@
  * Popup Script for Scholarships Plus Extension
  */
 
+const CONFIG = {
+  apiBaseUrl: 'http://localhost:3030',
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
   const statusText = document.getElementById('status-text');
   const openSidebarBtn = document.getElementById('open-sidebar');
   const openAppBtn = document.getElementById('open-app');
+
+  // Check authentication status
+  const result = await chrome.storage.local.get(['authToken', 'user']);
+
+  if (result.authToken) {
+    // User is authenticated
+    statusText.textContent = `Logged in as ${result.user?.email || 'user'}`;
+    checkCurrentPage();
+  } else {
+    // User needs to authenticate
+    statusText.textContent = 'Please log in to use the extension';
+    openSidebarBtn.style.display = 'none';
+
+    // Change openAppBtn to login button
+    openAppBtn.textContent = 'Log In';
+    openAppBtn.onclick = handleLogin;
+  }
+
+  // Open sidebar button
+  openSidebarBtn.addEventListener('click', async () => {
+    await chrome.sidePanel.open();
+    window.close();
+  });
+
+  // Original open app handler (for when already logged in)
+  if (!openAppBtn.onclick) {
+    openAppBtn.addEventListener('click', async () => {
+      await chrome.tabs.create({
+        url: `${CONFIG.apiBaseUrl}/applications`
+      });
+      window.close();
+    });
+  }
+});
+
+/**
+ * Check current page and show appropriate options
+ */
+async function checkCurrentPage() {
+  const statusText = document.getElementById('status-text');
+  const openSidebarBtn = document.getElementById('open-sidebar');
 
   // Check if current tab is on a scholarship portal
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -21,20 +66,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       openSidebarBtn.style.display = 'none';
     }
   }
+}
 
-  // Open sidebar button
-  openSidebarBtn.addEventListener('click', async () => {
-    await chrome.sidePanel.open();
-    window.close();
-  });
+/**
+ * Handle login flow
+ */
+async function handleLogin() {
+  // Use background service worker to handle authentication
+  const response = await chrome.runtime.sendMessage({ action: 'authenticate' });
 
-  // Open web app button
-  openAppBtn.addEventListener('click', async () => {
-    await chrome.tabs.create({
-      url: 'http://localhost:3000/applications'
-    });
-    window.close();
-  });
+  if (response.success) {
+    if (response.alreadyAuthenticated) {
+      statusText.textContent = `Already logged in as ${response.user?.email || 'user'}`;
+      openSidebarBtn.style.display = 'block';
+      openAppBtn.style.display = 'block';
+    } else {
+      // Login page opened, close popup
+      window.close();
+    }
+  } else {
+    statusText.textContent = 'Failed to open login page';
+  }
+}
+
+/**
+ * Listen for messages from content script or background
+ */
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'authSuccess') {
+    // Reload the popup to show updated status
+    window.location.reload();
+  }
 });
 
 function detectPortal(url) {

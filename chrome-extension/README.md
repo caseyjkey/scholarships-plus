@@ -1,5 +1,43 @@
 # Scholarships Plus Chrome Extension
 
+## Development Setup (Important!)
+
+### Chrome Remote Debugging Required
+
+**IMPORTANT**: This extension must be developed using Chrome with remote debugging enabled.
+
+1. **Open PowerShell as Administrator** on Windows
+2. Navigate to `chrome-development` directory:
+   ```powershell
+   cd C:\Users\YourUsername\Development\scholarships-plus\chrome-development
+   ```
+3. Run `chrome.bat`:
+   ```powershell
+   .\chrome.bat
+   ```
+
+The `chrome.bat` script:
+- Starts Chrome with remote debugging on port 9222
+- Sets up port forwarding from WSL2 to Windows
+- Uses a temp user data directory (`%temp%\dev-mode-chrome`)
+- Press any key to close when done
+
+### Why This Is Needed
+
+- Chrome runs on Windows, but development happens on WSL2
+- Remote debugging allows chrome-devtools MCP to connect from WSL2
+- Port forwarding (netsh) bridges WSL2 to Windows Chrome
+- Without this, you cannot test extension changes properly
+
+### Loading the Extension
+
+1. Navigate to `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select the `chrome-extension` directory:
+   - Windows: `C:\Users\YourUsername\Development\chrome-extension`
+   - WSL mount: `/mnt/c/Users/Omni/Development/chrome-extension`
+
 ## Installation (Development)
 
 1. Open Chrome and navigate to `chrome://extensions/`
@@ -57,10 +95,25 @@ To change this, update `CONFIG.apiBaseUrl` in:
 
 ### Loading Changes
 
+**CRITICAL**: Chrome caches extension content scripts aggressively.
+
 After making changes:
-1. Go to `chrome://extensions/`
-2. Click the refresh icon on "Scholarships Plus Assistant"
-3. Reload the demo page
+1. Copy files from WSL2 to Windows mount:
+   ```bash
+   cp /home/trill/Development/scholarships-plus/chrome-extension/*.js \
+      /mnt/c/Users/Omni/Development/chrome-extension/
+   ```
+2. **Bump version** in `manifest.json` (e.g., "0.2.4" → "0.2.5")
+3. Copy manifest.json too:
+   ```bash
+   cp /home/trill/Development/scholarships-plus/chrome-extension/manifest.json \
+      /mnt/c/Users/Omni/Development/chrome-extension/
+   ```
+4. Go to `chrome://extensions/`
+5. Click the refresh icon on "Scholarships Plus Assistant"
+6. Hard reload test page (Ctrl+Shift+R)
+
+**Why Bump Version?**: Chrome will not reload content scripts without a version change, even after clicking reload.
 
 ### File Structure
 

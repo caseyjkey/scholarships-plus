@@ -37,7 +37,6 @@
   max-width: 20px !important;
   min-height: 20px !important;
   max-height: 20px !important;
-  overflow: hidden !important;
   z-index: 10 !important;
   cursor: pointer !important;
   transition: transform 0.2s ease !important;
@@ -55,31 +54,31 @@
 
 /* For textareas - top right corner INSIDE textarea bounds (offset from top edge) */
 .sp-input-wrapper:has(textarea) .sp-sparkle-icon {
-  top: 8px !important;
+  top: 15px !important;
   transform: none !important;
 }
 
-/* For selects - position to avoid dropdown arrow, keep vertical center */
+/* For selects - position to avoid dropdown arrow, adjust vertical center */
 .sp-input-wrapper:has(select) .sp-sparkle-icon {
-  right: 40px !important;
-  top: 50% !important;
+  right: 20px !important;
+  top: calc(50% - 2px) !important;
   transform: translateY(-50%) !important;
 }
 
-/* For number inputs - position to avoid spin buttons, keep vertical center */
+/* For number inputs - position to avoid spin buttons, adjust vertical center */
 .sp-input-wrapper:has(input[type="number"]) .sp-sparkle-icon,
 .sp-input-wrapper:has(input[role="spinbutton"]) .sp-sparkle-icon {
   right: 40px !important;
-  top: 50% !important;
+  top: calc(50% - 2px) !important;
   transform: translateY(-50%) !important;
 }
 
-/* For date/month/time inputs - position to avoid calendar icon, keep vertical center */
+/* For date/month/time inputs - position to avoid calendar icon, adjust vertical center */
 .sp-input-wrapper:has(input[type="date"]) .sp-sparkle-icon,
 .sp-input-wrapper:has(input[type="month"]) .sp-sparkle-icon,
 .sp-input-wrapper:has(input[type="time"]) .sp-sparkle-icon {
   right: 40px !important;
-  top: 50% !important;
+  top: calc(50% - 2px) !important;
   transform: translateY(-50%) !important;
 }
 
@@ -93,6 +92,7 @@
   max-height: 20px !important;
   display: block !important;
   object-fit: contain !important;
+  overflow: hidden !important;
 }
 
 /* Hover effect - scale up */
@@ -105,24 +105,281 @@
   transform: scale(1.1) !important;
 }
 
-/* For selects/number/date, keep vertical center in hover */
-.sp-input-wrapper:has(select) .sp-sparkle-icon:hover,
+/* For selects - keep vertical center in hover */
+.sp-input-wrapper:has(select) .sp-sparkle-icon:hover {
+  top: calc(50% - 2px) !important;
+  transform: translateY(-50%) scale(1.1) !important;
+}
+
+/* For number inputs - keep vertical center in hover */
 .sp-input-wrapper:has(input[type="number"]) .sp-sparkle-icon:hover,
-.sp-input-wrapper:has(input[role="spinbutton"]) .sp-sparkle-icon:hover,
+.sp-input-wrapper:has(input[role="spinbutton"]) .sp-sparkle-icon:hover {
+  top: calc(50% - 2px) !important;
+  transform: translateY(-50%) scale(1.1) !important;
+}
+
+/* For date/month/time inputs - keep vertical center in hover */
 .sp-input-wrapper:has(input[type="date"]) .sp-sparkle-icon:hover,
 .sp-input-wrapper:has(input[type="month"]) .sp-sparkle-icon:hover,
 .sp-input-wrapper:has(input[type="time"]) .sp-sparkle-icon:hover {
+  top: calc(50% - 2px) !important;
   transform: translateY(-50%) scale(1.1) !important;
 }
 
 /* Loading animation - pulse effect */
-.sp-sparkle-icon.sp-sparkle-loading {
+.sp-sparkle-icon.sp-sparkle-loading,
+.sp-sparkle-icon.sp-sparkle-generating {
   animation: pulse 0.5s ease-in-out infinite !important;
 }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
+}
+
+/* Empty state - dim grey (no data available yet) */
+.sp-sparkle-icon.sp-sparkle-empty {
+  opacity: 0.5 !important;
+}
+
+/* Generating state - blue pulsing */
+.sp-sparkle-icon.sp-sparkle-generating {
+  animation: pulse 1s ease-in-out infinite !important;
+}
+
+/* Ready state - green */
+.sp-sparkle-icon.sp-sparkle-ready {
+  opacity: 1 !important;
+}
+
+/* Filled state - grey after autofill (clickable to open conversation) */
+.sp-sparkle-icon.sp-sparkle-filled {
+  opacity: 0.6 !important;
+  cursor: pointer !important;
+}
+
+.sp-sparkle-icon.sp-sparkle-filled:hover {
+  opacity: 0.8 !important;
+}
+
+/* Conversation Modal */
+.sp-conversation-modal {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: 90% !important;
+  max-width: 500px !important;
+  max-height: 80vh !important;
+  background: white !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3) !important;
+  z-index: 999999 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+}
+
+.sp-conversation-header {
+  padding: 16px 20px !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+
+.sp-conversation-header h3 {
+  margin: 0 !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #1f2937 !important;
+}
+
+.sp-conversation-close {
+  background: none !important;
+  border: none !important;
+  font-size: 24px !important;
+  cursor: pointer !important;
+  color: #6b7280 !important;
+  padding: 0 !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+}
+
+.sp-conversation-close:hover {
+  background: #f3f4f6 !important;
+}
+
+.sp-conversation-body {
+  padding: 20px !important;
+  overflow-y: auto !important;
+  flex: 1 !important;
+}
+
+.sp-conversation-messages {
+  margin-bottom: 16px !important;
+}
+
+.sp-message {
+  margin-bottom: 12px !important;
+  padding: 12px !important;
+  border-radius: 8px !important;
+  max-width: 85% !important;
+}
+
+.sp-message-user {
+  background: #3b82f6 !important;
+  color: white !important;
+  margin-left: auto !important;
+}
+
+.sp-message-agent {
+  background: #f3f4f6 !important;
+  color: #1f2937 !important;
+}
+
+.sp-message-suggestion {
+  background: #ecfdf5 !important;
+  color: #065f46 !important;
+  border: 1px solid #86efac !important;
+}
+
+.sp-message-label {
+  font-size: 11px !important;
+  opacity: 0.7 !important;
+  margin-bottom: 4px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.sp-message-content {
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  white-space: pre-wrap !important;
+}
+
+.sp-message-content p {
+  margin: 0 0 8px 0 !important;
+}
+
+.sp-message-content p:last-child {
+  margin-bottom: 0 !important;
+}
+
+.sp-approval-buttons {
+  display: flex !important;
+  gap: 8px !important;
+  margin-top: 8px !important;
+}
+
+.sp-approval-button {
+  padding: 8px 16px !important;
+  border-radius: 6px !important;
+  border: none !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+}
+
+.sp-approval-approve {
+  background: #10b981 !important;
+  color: white !important;
+}
+
+.sp-approval-approve:hover {
+  background: #059669 !important;
+  transform: scale(1.02) !important;
+}
+
+.sp-approval-reject {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.sp-approval-reject:hover {
+  background: #e5e7eb !important;
+}
+
+.sp-conversation-input {
+  display: flex !important;
+  gap: 8px !important;
+  padding: 16px 20px !important;
+  border-top: 1px solid #e5e7eb !important;
+}
+
+.sp-conversation-input input {
+  flex: 1 !important;
+  padding: 10px 14px !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  outline: none !important;
+}
+
+.sp-conversation-input input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+.sp-conversation-send {
+  padding: 10px 20px !important;
+  background: #3b82f6 !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: background 0.2s !important;
+}
+
+.sp-conversation-send:hover {
+  background: #2563eb !important;
+}
+
+.sp-conversation-send:disabled {
+  background: #9ca3af !important;
+  cursor: not-allowed !important;
+}
+
+/* Backdrop */
+.sp-conversation-backdrop {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0,0,0,0.5) !important;
+  z-index: 999998 !important;
+}
+
+/* Loading indicator for conversation */
+.sp-conversation-loading {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 12px !important;
+  color: #6b7280 !important;
+  font-size: 14px !important;
+}
+
+.sp-conversation-loading::before {
+  content: '' !important;
+  width: 16px !important;
+  height: 16px !important;
+  border: 2px solid #d1d5db !important;
+  border-top-color: #3b82f6 !important;
+  border-radius: 50% !important;
+  animation: spin 0.8s linear infinite !important;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Demo banner */
@@ -169,32 +426,34 @@
 
 /* Tooltip for help text - show on sparkle hover */
 .sp-sparkle-icon[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 100%;
-  right: 0;
-  margin-bottom: 8px;
-  padding: 8px 12px;
-  background: #1f2937;
-  color: white;
-  font-size: 12px;
-  font-family: system-ui, -apple-system, sans-serif;
-  white-space: nowrap;
-  border-radius: 6px;
-  z-index: 1000;
-  pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  content: attr(data-tooltip) !important;
+  position: absolute !important;
+  bottom: 100% !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  margin-bottom: 8px !important;
+  padding: 8px 12px !important;
+  background: #1f2937 !important;
+  color: white !important;
+  font-size: 12px !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  white-space: nowrap !important;
+  border-radius: 6px !important;
+  z-index: 999999 !important;
+  pointer-events: none !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }
 
 /* Tooltip arrow */
 .sp-sparkle-icon[data-tooltip]:hover::before {
-  content: '';
-  position: absolute;
-  bottom: 100%;
-  right: 12px;
-  margin-bottom: 2px;
-  border: 6px solid transparent;
-  border-top-color: #1f2937;
-  z-index: 1000;
-  pointer-events: none;
+  content: '' !important;
+  position: absolute !important;
+  bottom: 100% !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  margin-bottom: 2px !important;
+  border: 6px solid transparent !important;
+  border-top-color: #1f2937 !important;
+  z-index: 999999 !important;
+  pointer-events: none !important;
 }
