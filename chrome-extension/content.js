@@ -1,179 +1,794 @@
 /**
  * Content Script for Scholarships Plus Extension
- * Full version with SVG icons, sparkle burst effect, and container-based positioning
+ * Extracts fields, calls backend API, enables interactive conversation for field responses
  */
 
 console.log('Scholarships Plus: Content script START');
 
-// Signal to page that extension is loaded using custom event (works with CSP)
-var event = new CustomEvent('scholarshipsPlusExtensionLoaded', { detail: { version: '0.1.0' } });
+// Signal to page that extension is loaded
+var event = new CustomEvent('scholarshipsPlusExtensionLoaded', { detail: { version: '0.2.0' } });
 window.dispatchEvent(event);
 console.log('Scholarships Plus: Extension detection event dispatched');
 
-// Mock field mappings for demo
-const DEMO_MAPPINGS = {
-  firstName: { approvedValue: 'Jane', fieldLabel: 'First Name' },
-  lastName: { approvedValue: 'Doe', fieldLabel: 'Last Name' },
-  email: { approvedValue: 'jane.doe@example.com', fieldLabel: 'Email' },
-  phone: { approvedValue: '(555) 123-4567', fieldLabel: 'Phone' },
-  gpa: { approvedValue: '3.75', fieldLabel: 'GPA' },
-  classLevel: { approvedValue: 'Junior', fieldLabel: 'Class Level' },
-  major: { approvedValue: 'Computer Science', fieldLabel: 'Major' },
-  enrollmentStatus: { approvedValue: 'Full-Time', fieldLabel: 'Enrollment Status' },
-  graduationDate: { approvedValue: '2025-05', fieldLabel: 'Expected Graduation Date' },
-  leadership: { approvedValue: 'During my sophomore year, I served as the president of our university\'s Computer Science Club, where I organized weekly coding workshops and mentored underclassmen.', fieldLabel: 'Leadership Experience' },
-  goals: { approvedValue: 'My academic goal is to graduate with honors in Computer Science. My career goal is to become a software engineer creating technology for social good.', fieldLabel: 'Academic and Career Goals' },
-  challenges: { approvedValue: 'As a first-generation college student, I faced significant challenges adapting to university life. I sought mentorship from professors and joined study groups.', fieldLabel: 'Overcoming Challenges' },
-  communityService: { approvedValue: 'I volunteer weekly at a local food bank. I also tutor K-12 students in math and computer science.', fieldLabel: 'Community Service' },
-  income: { approvedValue: '$50,000 - $75,000', fieldLabel: 'Household Income' },
-  fafsa: { approvedValue: 'Yes', fieldLabel: 'FAFSA' },
-};
+// Configuration
+var API_BASE_URL = 'http://localhost:3030';
+var POLL_INTERVAL = 3000;
+var MAX_POLLS = 40;
 
-console.log('Scholarships Plus: Mappings loaded:', Object.keys(DEMO_MAPPINGS).length);
+// Storage for field data
+var extractedFields = [];
+var fieldMappings = {};
+var scholarshipId = null;
+var applicationId = null;
+var pollCount = 0;
+var pollTimer = null;
+var authToken = null;
 
-// Create sparkle icon element using the SVG file
-function createSparkleIconElement(color) {
-  color = color || '#9CA3AF';
+// Current conversation state
+var currentConversation = null;
+var conversationModal = null;
+var currentFieldName = null;
 
-  // Create img element pointing to the SVG file
+/**
+ * Generate CSS selector for an element
+ */
+function generateCSSSelector(element) {
+  if (element.id) {
+    return '#' + element.id;
+  }
+
+  if (element.name) {
+    var tagName = element.tagName.toLowerCase();
+    return tagName + '[name="' + element.name + '"]';
+  }
+
+  var path = [];
+  var current = element;
+
+  while (current && current !== document.body) {
+    var tagName = current.tagName.toLowerCase();
+    var selector = tagName;
+
+    if (!current.id && !current.name) {
+      var siblings = Array.from(current.parentNode.children).filter(function(el) {
+        return el.tagName === current.tagName;
+      });
+      var index = siblings.indexOf(current) + 1;
+      selector = tagName + ':nth-child(' + index + ')';
+    }
+
+    path.unshift(selector);
+    current = current.parentElement;
+
+    if (path.length >= 4) break;
+  }
+
+  return path.join(' > ');
+}
+
+/**
+ * Generate XPath for an element
+ */
+function generateXPath(element) {
+  if (element.id) {
+    return '//*[@id="' + element.id + '"]';
+  }
+
+  var parts = [];
+  var current = element;
+
+  while (current && current.nodeType === Node.ELEMENT_NODE) {
+    var index = 0;
+    var hasFollowingSiblings = false;
+    var sibling = current.previousSibling;
+
+    while (sibling) {
+      if (sibling.nodeType === Node.ELEMENT_NODE && sibling.tagName === current.tagName) {
+        index++;
+        hasFollowingSiblings = true;
+      }
+      sibling = sibling.previousSibling;
+    }
+
+    var tagName = current.tagName.toLowerCase();
+    var pathIndex = (hasFollowingSiblings || index > 0) ? '[' + (index + 1) + ']' : '';
+    parts.unshift(tagName + pathIndex);
+
+    current = current.parentElement;
+
+    if (parts.length >= 5) break;
+  }
+
+  return '//' + parts.join('/');
+}
+
+/**
+ * Extract field information from a form element
+ */
+function extractFieldInfo(element, index) {
+  var info = {
+    fieldName: element.name || element.id || 'field_' + index,
+    fieldLabel: '',
+    fieldType: element.type || element.tagName.toLowerCase(),
+    cssSelector: generateCSSSelector(element),
+    xpath: generateXPath(element),
+    position: index,
+  };
+
+  var label = null;
+
+  if (element.id) {
+    label = document.querySelector('label[for="' + element.id + '"]');
+  }
+
+  if (!label) {
+    label = element.closest('label');
+  }
+
+  if (!label) {
+    var formGroup = element.closest('div, .form-group, .ss-field, [class*="field"], .field');
+    if (formGroup) {
+      label = formGroup.querySelector('label');
+    }
+  }
+
+  if (label) {
+    info.fieldLabel = label.textContent.trim().replace(/\*$/, '').trim();
+  } else {
+    info.fieldLabel = element.placeholder || element.name || element.id || 'Field ' + (index + 1);
+  }
+
+  if (info.fieldType === 'select') {
+    info.options = Array.from(element.options).map(function(opt) {
+      return { label: opt.textContent.trim(), value: opt.value };
+    }).filter(function(opt) { return opt.label; });
+  }
+
+  return info;
+}
+
+/**
+ * Extract all form fields from the page
+ */
+function extractAllFields() {
+  var fields = [];
+  var fieldIndex = 0;
+
+  var elements = document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea, select');
+
+  elements.forEach(function(element) {
+    if (element.hasAttribute('data-sparkle-added')) return;
+
+    var fieldInfo = extractFieldInfo(element, fieldIndex);
+    fields.push(fieldInfo);
+    fieldIndex++;
+
+    element.setAttribute('data-sparkle-added', 'true');
+  });
+
+  return fields;
+}
+
+/**
+ * Get auth token from storage
+ */
+function getAuthToken(callback) {
+  chrome.storage.local.get(['authToken'], function(result) {
+    authToken = result.authToken;
+    callback(authToken);
+  });
+}
+
+/**
+ * Submit extracted fields to backend API
+ */
+function submitFieldsToAPI(fields, callback) {
+  getAuthToken(function(token) {
+    if (!token) {
+      console.error('Scholarships Plus: No auth token found');
+      callback(null);
+      return;
+    }
+
+    fetch(API_BASE_URL + '/api/extension/fields', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({
+        url: window.location.href,
+        fields: fields,
+      }),
+    })
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('API request failed: ' + response.status);
+      }
+      return response.json();
+    })
+    .then(function(data) {
+      console.log('Scholarships Plus: Fields submitted, response:', data);
+      scholarshipId = data.scholarshipId;
+      applicationId = data.applicationId;
+
+      fieldMappings = {};
+      if (data.mappings && Array.isArray(data.mappings)) {
+        data.mappings.forEach(function(mapping) {
+          fieldMappings[mapping.fieldName] = mapping;
+        });
+      }
+
+      callback(data);
+    })
+    .catch(function(error) {
+      console.error('Scholarships Plus: API error:', error);
+      callback(null);
+    });
+  });
+}
+
+/**
+ * Poll for updated field mappings
+ */
+function pollForUpdates() {
+  if (pollCount >= MAX_POLLS) {
+    console.log('Scholarships Plus: Max polls reached, stopping');
+    stopPolling();
+    return;
+  }
+
+  pollCount++;
+
+  getAuthToken(function(token) {
+    if (!token || !scholarshipId) {
+      stopPolling();
+      return;
+    }
+
+    fetch(API_BASE_URL + '/api/extension/field-mappings/' + scholarshipId, {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+      },
+    })
+    .then(function(response) {
+      if (!response.ok) throw new Error('Poll failed');
+      return response.json();
+    })
+    .then(function(data) {
+      if (data.mappings && Array.isArray(data.mappings)) {
+        data.mappings.forEach(function(mapping) {
+          var existing = fieldMappings[mapping.fieldName];
+
+          if (mapping.approvedValue && (!existing || !existing.approvedValue)) {
+            console.log('Scholarships Plus: New value for ' + mapping.fieldName);
+            fieldMappings[mapping.fieldName] = mapping;
+            updateSparkleForField(mapping.fieldName, mapping.approvedValue);
+          }
+
+          if (existing && existing.generating !== mapping.generating) {
+            fieldMappings[mapping.fieldName] = mapping;
+            updateSparkleState(mapping.fieldName, mapping.generating);
+          }
+        });
+      }
+
+      var allDone = Object.keys(fieldMappings).every(function(key) {
+        return fieldMappings[key].approvedValue && !fieldMappings[key].generating;
+      });
+
+      if (allDone) {
+        console.log('Scholarships Plus: All fields have values, stopping poll');
+        stopPolling();
+      } else {
+        pollTimer = setTimeout(pollForUpdates, POLL_INTERVAL);
+      }
+    })
+    .catch(function(error) {
+      console.error('Scholarships Plus: Poll error:', error);
+      pollTimer = setTimeout(pollForUpdates, POLL_INTERVAL);
+    });
+  });
+}
+
+/**
+ * Stop polling for updates
+ */
+function stopPolling() {
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+}
+
+/**
+ * Create sparkle icon element
+ */
+function createSparkleIcon(state) {
+  state = state || 'empty';
+
+  var icon = document.createElement('div');
+  icon.className = 'sp-sparkle-icon';
+
+  if (state === 'empty') {
+    icon.classList.add('sp-sparkle-empty');
+  } else if (state === 'generating') {
+    icon.classList.add('sp-sparkle-generating');
+  } else if (state === 'ready') {
+    icon.classList.add('sp-sparkle-ready');
+  } else if (state === 'filled') {
+    icon.classList.add('sp-sparkle-filled');
+  }
+
   var img = document.createElement('img');
   img.src = chrome.runtime.getURL('icons/sparkle.svg');
   img.style.width = '20px';
   img.style.height = '20px';
   img.style.display = 'block';
-  img.style.filter = 'brightness(0) saturate(100%)';
 
-  // Apply color tint using CSS filter based on color
-  if (color === '#9CA3AF') {
-    // Grey
-    img.style.filter = 'grayscale(100%) brightness(0.6)';
-  } else if (color === '#10B981') {
-    // Green
-    img.style.filter = 'sepia(1) saturate(5) hue-rotate(90deg) brightness(0.8)';
-  } else if (color === '#60A5FA') {
-    // Blue
+  if (state === 'empty') {
+    img.style.filter = 'grayscale(100%) brightness(0.4) opacity(0.5)';
+  } else if (state === 'generating') {
     img.style.filter = 'sepia(1) saturate(3) hue-rotate(180deg) brightness(0.9)';
+  } else if (state === 'ready') {
+    img.style.filter = 'sepia(1) saturate(5) hue-rotate(90deg) brightness(0.8)';
+  } else if (state === 'filled') {
+    img.style.filter = 'grayscale(100%) brightness(0.7)';
   }
 
-  return img;
+  icon.appendChild(img);
+  return icon;
 }
 
-// CSS content (will be injected when document.head is ready)
-const CSS_CONTENT = `
-  /* Container method for input-with-icon */
-  .sp-input-wrapper {
-    position: relative !important;
-    display: flex !important;
-    align-items: center !important;
-    width: 100% !important;
-  }
+/**
+ * Add sparkle icon to a field
+ */
+function addSparkleIcon(input, fieldName) {
+  var mapping = fieldMappings[fieldName];
+  var state = 'empty';
 
-  /* Add right padding to input to make room for icon */
-  .sp-input-wrapper > input,
-  .sp-input-wrapper > textarea {
-    padding-right: 40px !important;
-  }
-
-  /* SVG icon positioned absolutely on right side */
-  .sp-sparkle-icon {
-    position: absolute !important;
-    right: 12px !important;
-    width: 20px !important;
-    height: 20px !important;
-    min-width: 20px !important;
-    max-width: 20px !important;
-    min-height: 20px !important;
-    max-height: 20px !important;
-    cursor: pointer !important;
-    transition: transform 0.2s ease !important;
-    pointer-events: auto !important;
-    z-index: 10 !important;
-    flex-shrink: 0 !important;
-    display: block !important;
-    overflow: hidden !important;
-  }
-
-  .sp-sparkle-icon img {
-    width: 20px !important;
-    height: 20px !important;
-    min-width: 20px !important;
-    max-width: 20px !important;
-    min-height: 20px !important;
-    max-height: 20px !important;
-    display: block !important;
-    object-fit: contain !important;
-  }
-
-  .sp-sparkle-icon:hover {
-    transform: scale(1.1) !important;
-  }
-
-  /* Color states using CSS filters on SVG paths */
-  .sp-sparkle-icon.sp-sparkle-grey path {
-    fill: #9CA3AF !important;
-  }
-
-  .sp-sparkle-icon.sp-sparkle-filled path {
-    fill: #10B981 !important;
-  }
-
-  .sp-sparkle-icon.sp-sparkle-loading path {
-    fill: #60A5FA !important;
-  }
-
-  .sp-sparkle-icon.sp-sparkle-loading {
-    animation: pulse 0.5s ease-in-out infinite !important;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.6; transform: scale(1.1); }
-  }
-
-  /* Demo banner */
-  .sp-demo-banner {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 14px;
-    z-index: 999999;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    animation: slideIn 0.3s ease-out;
-  }
-
-  @keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-  }
-
-  /* Sparkle burst particles */
-  .sp-sparkle-particle {
-    position: fixed !important;
-    pointer-events: none !important;
-    background: #60A5FA !important;
-    border-radius: 50% !important;
-    z-index: 999999 !important;
-    animation: sparkle-burst 0.6s ease-out forwards !important;
-  }
-
-  @keyframes sparkle-burst {
-    0% {
-      transform: translate(0, 0) scale(1);
-      opacity: 1;
-    }
-    100% {
-      transform: translate(var(--tw-x), var(--tw-y)) scale(0);
-      opacity: 0;
+  if (mapping) {
+    if (mapping.generating) {
+      state = 'generating';
+    } else if (mapping.approvedValue) {
+      state = 'ready';
     }
   }
-`;
 
-// Create sparkle burst particles
+  var icon = createSparkleIcon(state);
+
+  var tooltipText = mapping ? mapping.fieldLabel : fieldName;
+  if (state === 'empty') {
+    tooltipText = 'Click to generate response';
+  } else if (state === 'generating') {
+    tooltipText = 'Generating response...';
+  } else if (state === 'ready') {
+    tooltipText = 'Click to fill';
+  } else if (state === 'filled') {
+    tooltipText = 'Click to edit';
+  }
+
+  icon.setAttribute('data-tooltip', tooltipText);
+  icon.title = tooltipText;
+
+  var isFilled = (state === 'filled');
+
+  icon.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (state === 'generating') return;
+
+    // Open conversation for all states except generating
+    openConversation(fieldName, input, icon);
+  });
+
+  input._sparkleIcon = icon;
+  input._sparkleState = state;
+
+  var parent = input.parentElement;
+  if (parent) {
+    parent.classList.add('sp-input-wrapper');
+    parent.appendChild(icon);
+  }
+}
+
+/**
+ * Update sparkle for a specific field
+ */
+function updateSparkleForField(fieldName, approvedValue) {
+  var input = document.querySelector('[name="' + fieldName + '"], #' + fieldName);
+  if (!input || !input._sparkleIcon) return;
+
+  var icon = input._sparkleIcon;
+  var img = icon.querySelector('img');
+
+  icon.classList.remove('sp-sparkle-empty', 'sp-sparkle-generating');
+  icon.classList.add('sp-sparkle-ready');
+  img.style.filter = 'sepia(1) saturate(5) hue-rotate(90deg) brightness(0.8)';
+  icon.setAttribute('data-tooltip', 'Click to fill');
+  icon.title = 'Click to fill';
+  input._sparkleState = 'ready';
+}
+
+/**
+ * Update sparkle state
+ */
+function updateSparkleState(fieldName, isGenerating) {
+  var input = document.querySelector('[name="' + fieldName + '"], #' + fieldName);
+  if (!input || !input._sparkleIcon) return;
+
+  var icon = input._sparkleIcon;
+  var img = icon.querySelector('img');
+
+  if (isGenerating) {
+    icon.classList.remove('sp-sparkle-empty', 'sp-sparkle-ready', 'sp-sparkle-filled');
+    icon.classList.add('sp-sparkle-generating');
+    img.style.filter = 'sepia(1) saturate(3) hue-rotate(180deg) brightness(0.9)';
+    icon.setAttribute('data-tooltip', 'Generating response...');
+    icon.title = 'Generating response...';
+    input._sparkleState = 'generating';
+  }
+}
+
+/**
+ * Transition sparkle to filled state after autofill
+ */
+function transitionToFilled(input) {
+  if (!input || !input._sparkleIcon) return;
+
+  var icon = input._sparkleIcon;
+  var img = icon.querySelector('img');
+
+  icon.classList.remove('sp-sparkle-empty', 'sp-sparkle-generating', 'sp-sparkle-ready');
+  icon.classList.add('sp-sparkle-filled');
+  img.style.filter = 'grayscale(100%) brightness(0.7)';
+  icon.setAttribute('data-tooltip', 'Click to edit');
+  icon.title = 'Click to edit';
+  input._sparkleState = 'filled';
+}
+
+/**
+ * Open conversation modal
+ */
+function openConversation(fieldName, input, icon) {
+  currentFieldName = fieldName;
+  var mapping = fieldMappings[fieldName];
+  var fieldLabel = mapping ? mapping.fieldLabel : fieldName;
+
+  closeConversation();
+
+  conversationModal = createConversationModal(fieldName, fieldLabel, input, icon);
+  document.body.appendChild(conversationModal);
+
+  // If we have context (previous approvedValue), show it
+  if (mapping && mapping.approvedValue) {
+    addMessageToConversation('agent', 'Current response:', mapping.approvedValue);
+  }
+}
+
+/**
+ * Create conversation modal
+ */
+function createConversationModal(fieldName, fieldLabel, input, icon) {
+  var modal = document.createElement('div');
+  modal.className = 'sp-conversation-modal';
+  modal.id = 'sp-conversation-modal';
+
+  // Build modal without inline event handlers
+  var header = document.createElement('div');
+  header.className = 'sp-conversation-header';
+
+  var heading = document.createElement('h3');
+  heading.textContent = fieldLabel;
+
+  var closeBtn = document.createElement('button');
+  closeBtn.className = 'sp-conversation-close';
+  closeBtn.innerHTML = '&times;';
+  closeBtn.addEventListener('click', closeConversation);
+
+  header.appendChild(heading);
+  header.appendChild(closeBtn);
+
+  var body = document.createElement('div');
+  body.className = 'sp-conversation-body';
+
+  var messagesDiv = document.createElement('div');
+  messagesDiv.className = 'sp-conversation-messages';
+  messagesDiv.id = 'sp-conversation-messages';
+
+  var loadingDiv = document.createElement('div');
+  loadingDiv.id = 'sp-conversation-loading';
+  loadingDiv.className = 'sp-conversation-loading';
+  loadingDiv.style.display = 'none';
+  loadingDiv.textContent = 'AI is thinking...';
+
+  body.appendChild(messagesDiv);
+  body.appendChild(loadingDiv);
+
+  var inputDiv = document.createElement('div');
+  inputDiv.className = 'sp-conversation-input';
+
+  var inputField = document.createElement('input');
+  inputField.type = 'text';
+  inputField.id = 'sp-conversation-input-field';
+  inputField.placeholder = 'Describe what you\'d like to say here...';
+
+  var sendBtn = document.createElement('button');
+  sendBtn.className = 'sp-conversation-send';
+  sendBtn.id = 'sp-conversation-send-btn';
+  sendBtn.textContent = 'Send';
+
+  inputDiv.appendChild(inputField);
+  inputDiv.appendChild(sendBtn);
+
+  modal.appendChild(header);
+  modal.appendChild(body);
+  modal.appendChild(inputDiv);
+
+  // Setup input handling
+  setTimeout(function() {
+    inputField.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendUserMessage();
+      }
+    });
+
+    sendBtn.addEventListener('click', sendUserMessage);
+
+    inputField.focus();
+  }, 100);
+
+  return modal;
+}
+
+/**
+ * Close conversation modal
+ */
+window.closeConversation = function() {
+  if (conversationModal) {
+    conversationModal.remove();
+    conversationModal = null;
+  }
+
+  var backdrop = document.querySelector('.sp-conversation-backdrop');
+  if (backdrop) {
+    backdrop.remove();
+  }
+
+  currentFieldName = null;
+  currentConversation = null;
+};
+
+/**
+ * Add message to conversation
+ */
+function addMessageToConversation(type, label, content, withApproval) {
+  var messagesContainer = document.getElementById('sp-conversation-messages');
+  if (!messagesContainer) return;
+
+  var messageDiv = document.createElement('div');
+  messageDiv.className = 'sp-message sp-message-' + type;
+
+  var labelDiv = document.createElement('div');
+  labelDiv.className = 'sp-message-label';
+  labelDiv.textContent = label;
+
+  var contentDiv = document.createElement('div');
+  contentDiv.className = 'sp-message-content';
+  contentDiv.textContent = content;
+
+  messageDiv.appendChild(labelDiv);
+  messageDiv.appendChild(contentDiv);
+
+  if (withApproval) {
+    var approvalDiv = document.createElement('div');
+    approvalDiv.className = 'sp-approval-buttons';
+
+    var approveBtn = document.createElement('button');
+    approveBtn.className = 'sp-approval-button sp-approval-approve';
+    approveBtn.textContent = '✨ Sounds good!';
+    approveBtn.addEventListener('click', function() {
+      if (typeof window.approveSuggestion === 'function') {
+        window.approveSuggestion();
+      }
+    });
+
+    var rejectBtn = document.createElement('button');
+    rejectBtn.className = 'sp-approval-button sp-approval-reject';
+    rejectBtn.textContent = 'Let\'s change that.';
+    rejectBtn.addEventListener('click', function() {
+      if (typeof window.rejectSuggestion === 'function') {
+        window.rejectSuggestion();
+      }
+    });
+
+    approvalDiv.appendChild(approveBtn);
+    approvalDiv.appendChild(rejectBtn);
+    messageDiv.appendChild(approvalDiv);
+  }
+
+  messagesContainer.appendChild(messageDiv);
+
+  // Scroll to bottom
+  var body = document.querySelector('.sp-conversation-body');
+  if (body) {
+    body.scrollTop = body.scrollHeight;
+  }
+}
+
+/**
+ * Send user message
+ */
+function sendUserMessage() {
+  var inputField = document.getElementById('sp-conversation-input-field');
+  var message = inputField.value.trim();
+
+  if (!message) return;
+
+  inputField.value = '';
+
+  addMessageToConversation('user', 'You', message, false);
+
+  // Call chat API
+  callChatAPI(message);
+}
+
+/**
+ * Call chat API for field conversation
+ */
+function callChatAPI(userMessage) {
+  if (!currentFieldName || !scholarshipId || !applicationId) {
+    console.error('Scholarships Plus: Missing context for chat');
+    return;
+  }
+
+  var loadingEl = document.getElementById('sp-conversation-loading');
+  if (loadingEl) {
+    loadingEl.style.display = 'flex';
+  }
+
+  var inputField = document.getElementById('sp-conversation-input-field');
+  var sendBtn = document.getElementById('sp-conversation-send-btn');
+  if (inputField) inputField.disabled = true;
+  if (sendBtn) sendBtn.disabled = true;
+
+  getAuthToken(function(token) {
+    if (!token) {
+      console.error('Scholarships Plus: No auth token for chat');
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (inputField) inputField.disabled = false;
+      if (sendBtn) sendBtn.disabled = false;
+      return;
+    }
+
+    var mapping = fieldMappings[currentFieldName];
+
+    fetch(API_BASE_URL + '/api/extension/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({
+        scholarshipId: scholarshipId,
+        applicationId: applicationId,
+        fieldName: currentFieldName,
+        fieldLabel: mapping ? mapping.fieldLabel : currentFieldName,
+        fieldType: mapping ? mapping.fieldType : 'text',
+        message: userMessage,
+        currentValue: mapping ? mapping.approvedValue : null,
+      }),
+    })
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('Chat API failed: ' + response.status);
+      }
+      return response.json();
+    })
+    .then(function(data) {
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (inputField) inputField.disabled = false;
+      if (sendBtn) sendBtn.disabled = false;
+
+      if (data.response) {
+        // Add as suggestion with approval buttons
+        addMessageToConversation('suggestion', 'Suggested response:', data.response, true);
+
+        // Store the suggested response for approval
+        if (!currentConversation) {
+          currentConversation = [];
+        }
+        currentConversation.push({
+          type: 'suggestion',
+          content: data.response,
+        });
+      }
+    })
+    .catch(function(error) {
+      console.error('Scholarships Plus: Chat API error:', error);
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (inputField) inputField.disabled = false;
+      if (sendBtn) sendBtn.disabled = false;
+
+      addMessageToConversation('agent', 'Error', 'Sorry, I couldn\'t generate a response. Please try again.', false);
+    });
+  });
+}
+
+/**
+ * Approve suggestion and fill field
+ */
+window.approveSuggestion = function() {
+  if (!currentConversation || currentConversation.length === 0) return;
+
+  var lastSuggestion = currentConversation[currentConversation.length - 1];
+  if (lastSuggestion.type !== 'suggestion') return;
+
+  var suggestedValue = lastSuggestion.content;
+  var input = document.querySelector('[name="' + currentFieldName + '"], #' + currentFieldName);
+
+  if (input && suggestedValue) {
+    // Fill the field
+    fillField(input, suggestedValue);
+
+    // Update the mapping
+    fieldMappings[currentFieldName] = {
+      fieldName: currentFieldName,
+      approvedValue: suggestedValue,
+      generating: false,
+    };
+
+    // Close conversation
+    closeConversation();
+  }
+};
+
+/**
+ * Reject suggestion and allow further input
+ */
+window.rejectSuggestion = function() {
+  // Remove the suggestion from history
+  if (currentConversation && currentConversation.length > 0) {
+    currentConversation.pop();
+  }
+
+  // Add message indicating rejection
+  addMessageToConversation('agent', 'System', 'Got it! What would you like to change about the response?', false);
+
+  // Focus input
+  var inputField = document.getElementById('sp-conversation-input-field');
+  if (inputField) {
+    inputField.focus();
+    inputField.placeholder = 'Tell me what to change...';
+  }
+};
+
+/**
+ * Fill field with animation
+ */
+function fillField(input, value) {
+  // Get sparkle icon for animation
+  var icon = input._sparkleIcon;
+  var rect = null;
+
+  if (icon) {
+    rect = icon.getBoundingClientRect();
+    createSparkleBurst(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+
+  // Fill with adaptive speed
+  fillFieldWithAnimation(input, value).then(function() {
+    // Transition to filled state
+    transitionToFilled(input);
+  });
+}
+
+/**
+ * Create sparkle burst
+ */
 function createSparkleBurst(x, y) {
   var particleCount = 8;
 
@@ -181,30 +796,28 @@ function createSparkleBurst(x, y) {
     var particle = document.createElement('div');
     particle.className = 'sp-sparkle-particle';
 
-    // Randomize direction and distance
     var destinationX = (Math.random() - 0.5) * 100;
     var destinationY = (Math.random() - 0.5) * 100;
 
     particle.style.setProperty('--tw-x', destinationX + 'px');
     particle.style.setProperty('--tw-y', destinationY + 'px');
 
-    // Randomize size
     var size = Math.random() * 6 + 4;
     particle.style.width = size + 'px';
     particle.style.height = size + 'px';
 
-    // Position at click - use viewport coordinates
     particle.style.left = x + 'px';
     particle.style.top = y + 'px';
 
     document.body.appendChild(particle);
 
-    // Clean up DOM after animation
     setTimeout(function() { particle.remove(); }, 600);
   }
 }
 
-// Fill field with typewriter animation
+/**
+ * Fill field with typewriter animation
+ */
 function fillFieldWithAnimation(input, value) {
   return new Promise(function(resolve) {
     if (input.tagName === 'SELECT') {
@@ -218,6 +831,18 @@ function fillFieldWithAnimation(input, value) {
       resolve(true);
     } else {
       input.value = '';
+
+      var speed;
+      if (value.length < 100) {
+        speed = 15;
+      } else if (value.length < 500) {
+        speed = 8;
+      } else {
+        input.value = value;
+        resolve(true);
+        return;
+      }
+
       var index = 0;
       var interval = setInterval(function() {
         if (index < value.length) {
@@ -227,14 +852,16 @@ function fillFieldWithAnimation(input, value) {
           clearInterval(interval);
           resolve(true);
         }
-      }, 15);
+      }, speed);
 
-      // Fallback: ensure value is set after timeout
+      var fullDuration = value.length * speed + 500;
       setTimeout(function() {
-        clearInterval(interval);
-        input.value = value;
+        if (index < value.length) {
+          clearInterval(interval);
+          input.value = value;
+        }
         resolve(true);
-      }, Math.min(800, value.length * 15));
+      }, fullDuration);
     }
 
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -242,108 +869,24 @@ function fillFieldWithAnimation(input, value) {
   });
 }
 
-// Add sparkle icon to a field with intelligent positioning
-function addSparkleIcon(input, fieldName) {
-  var mapping = DEMO_MAPPINGS[fieldName];
-  if (!mapping) return;
-
-  // Check if already has sparkle
-  if (input.hasAttribute('data-sparkle-added')) return;
-  input.setAttribute('data-sparkle-added', 'true');
-
-  var icon = document.createElement('div');
-  icon.className = 'sp-sparkle-icon sp-sparkle-grey';
-
-  // Create the image element
-  var img = createSparkleIconElement('#9CA3AF');
-  icon.appendChild(img);
-
-  // Set tooltip - use help text if available, otherwise field label
-  var helpText = null;
-  var formGroup = input.closest('div, .form-group, .ss-field, [class*="field"]');
-  if (formGroup) {
-    // Look for help text with pattern: text-xs text-gray-500 mt-1 and contains "AI"
-    var helpElements = formGroup.querySelectorAll('div');
-    for (var i = 0; i < helpElements.length; i++) {
-      var el = helpElements[i];
-      var classes = el.className || '';
-      if ((classes.includes('text-xs') || classes.includes('text-gray-500') || classes.includes('hint')) &&
-          el.textContent && el.textContent.includes('AI')) {
-        helpText = el.textContent.trim();
-        // Hide the help text
-        el.style.display = 'none';
-        break;
-      }
-    }
-  }
-
-  icon.setAttribute('data-tooltip', helpText || mapping.fieldLabel);
-  icon.title = helpText || mapping.fieldLabel;
-
-  // Track if filled
-  var isFilled = false;
-
-  icon.addEventListener('click', async function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (isFilled) return; // Already filled
-
-    // Get viewport position for sparkle burst
-    var rect = icon.getBoundingClientRect();
-    var centerX = rect.left + rect.width / 2;
-    var centerY = rect.top + rect.height / 2;
-
-    // Create sparkle burst at viewport coordinates
-    createSparkleBurst(centerX, centerY);
-
-    // Update state - change color to blue (loading)
-    var img = icon.querySelector('img');
-    icon.classList.remove('sp-sparkle-grey');
-    icon.classList.add('sp-sparkle-loading');
-    if (img) img.style.filter = 'sepia(1) saturate(3) hue-rotate(180deg) brightness(0.9)';
-
-    await fillFieldWithAnimation(input, mapping.approvedValue);
-
-    setTimeout(function() {
-      // Change color to green (filled)
-      icon.classList.remove('sp-sparkle-loading');
-      icon.classList.add('sp-sparkle-filled');
-      if (img) img.style.filter = 'sepia(1) saturate(5) hue-rotate(90deg) brightness(0.8)';
-      icon.title = '✓ ' + mapping.fieldLabel;
-      isFilled = true;
-    }, 300);
-  });
-
-  // Add wrapper class and append icon - CSS handles positioning based on input type
-  var parent = input.parentElement;
-  if (parent) {
-    parent.classList.add('sp-input-wrapper');
-    parent.appendChild(icon);
-  }
-}
-
-// Find and process all form fields
-function processFields() {
-  var fields = document.querySelectorAll('input:not([type=hidden]), textarea, select');
-  console.log('Scholarships Plus: Found ' + fields.length + ' form fields');
-
-  var matchedCount = 0;
-  for (var i = 0; i < fields.length; i++) {
-    var field = fields[i];
-    var fieldName = field.name || field.id;
-    if (fieldName && DEMO_MAPPINGS[fieldName]) {
-      addSparkleIcon(field, fieldName);
-      matchedCount++;
-    }
-  }
-
-  console.log('Scholarships Plus: Added sparkles to ' + matchedCount + ' fields');
-
-  // Show banner
+/**
+ * Show status banner
+ */
+function showBanner(totalFields, readyCount, generatingCount) {
   var banner = document.createElement('div');
   banner.className = 'sp-demo-banner';
-  banner.innerHTML = '✨ <strong>Scholarships+ Extension</strong><br>' + matchedCount + ' fields ready • Click sparkles to auto-fill';
+
+  var message = '✨ <strong>Scholarships+ Extension</strong><br>';
+
+  if (readyCount === totalFields) {
+    message += totalFields + ' fields ready to fill!';
+  } else if (generatingCount > 0) {
+    message += readyCount + ' fields ready • ' + generatingCount + ' generating...';
+  } else {
+    message += 'Detected ' + totalFields + ' fields • Click sparkles to generate';
+  }
+
+  banner.innerHTML = message;
   document.body.appendChild(banner);
 
   setTimeout(function() {
@@ -353,115 +896,72 @@ function processFields() {
   }, 5000);
 }
 
-// Process fields with multiple attempts for React-rendered content
+/**
+ * Process fields and add sparkles
+ */
+function processFields() {
+  console.log('Scholarships Plus: Processing fields...');
+
+  extractedFields = extractAllFields();
+  console.log('Scholarships Plus: Extracted ' + extractedFields.length + ' fields');
+
+  if (extractedFields.length === 0) {
+    console.log('Scholarships Plus: No fields found');
+    return;
+  }
+
+  submitFieldsToAPI(extractedFields, function(response) {
+    if (!response) {
+      console.error('Scholarships Plus: Failed to submit fields');
+      return;
+    }
+
+    var readyCount = 0;
+    var generatingCount = 0;
+
+    extractedFields.forEach(function(fieldInfo) {
+      var input = document.querySelector('[name="' + fieldInfo.fieldName + '"], #' + fieldInfo.fieldName);
+      if (input) {
+        addSparkleIcon(input, fieldInfo.fieldName);
+
+        var mapping = fieldMappings[fieldInfo.fieldName];
+        if (mapping) {
+          if (mapping.approvedValue) {
+            readyCount++;
+          } else if (mapping.generating) {
+            generatingCount++;
+          }
+        }
+      }
+    });
+
+    console.log('Scholarships Plus: Added sparkles - ' + readyCount + ' ready, ' + generatingCount + ' generating');
+
+    showBanner(extractedFields.length, readyCount, generatingCount);
+
+    if (generatingCount > 0) {
+      console.log('Scholarships Plus: Starting polling for updates...');
+      pollTimer = setTimeout(pollForUpdates, POLL_INTERVAL);
+    }
+  });
+}
+
+/**
+ * Initialize extension
+ */
 function init() {
-  // Inject CSS first - force inject to ensure it works
-  try {
-    const style = document.createElement('style');
-    style.id = 'scholarships-plus-styles';
-    style.textContent = `
-      .sp-input-wrapper {
-        position: relative !important;
-        display: flex !important;
-        align-items: center !important;
-        width: 100% !important;
-      }
-      .sp-input-wrapper > input,
-      .sp-input-wrapper > textarea {
-        padding-right: 40px !important;
-      }
-      .sp-sparkle-icon {
-        position: absolute !important;
-        right: 12px !important;
-        width: 20px !important;
-        height: 20px !important;
-        min-width: 20px !important;
-        max-width: 20px !important;
-        min-height: 20px !important;
-        max-height: 20px !important;
-        cursor: pointer !important;
-        transition: transform 0.2s ease !important;
-        pointer-events: auto !important;
-        z-index: 10 !important;
-        flex-shrink: 0 !important;
-        display: block !important;
-        overflow: hidden !important;
-      }
-      .sp-sparkle-icon img {
-        width: 20px !important;
-        height: 20px !important;
-        min-width: 20px !important;
-        max-width: 20px !important;
-        min-height: 20px !important;
-        max-height: 20px !important;
-        display: block !important;
-        object-fit: contain !important;
-      }
-      .sp-sparkle-icon:hover {
-        transform: scale(1.1) !important;
-      }
-      .sp-sparkle-icon.sp-sparkle-loading {
-        animation: pulse 0.5s ease-in-out infinite !important;
-      }
-      @keyframes pulse {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.6; transform: scale(1.1); }
-      }
-      .sp-demo-banner {
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        font-family: system-ui, -apple-system, sans-serif;
-        font-size: 14px;
-        z-index: 999999;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        animation: slideIn 0.3s ease-out;
-      }
-      @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-      }
-      .sp-sparkle-particle {
-        position: fixed !important;
-        pointer-events: none !important;
-        background: #60A5FA !important;
-        border-radius: 50% !important;
-        z-index: 999999 !important;
-        animation: sparkle-burst 0.6s ease-out forwards !important;
-      }
-      @keyframes sparkle-burst {
-        0% {
-          transform: translate(0, 0) scale(1);
-          opacity: 1;
-        }
-        100% {
-          transform: translate(var(--tw-x), var(--tw-y)) scale(0);
-          opacity: 0;
-        }
-      }
-    `;
-    (document.head || document.documentElement).appendChild(style);
-    console.log('Scholarships Plus: CSS injected');
-  } catch (e) {
-    console.error('Scholarships Plus: CSS injection failed:', e);
+  console.log('Scholarships Plus: Initializing...');
+
+  if (!document.body) {
+    document.addEventListener('DOMContentLoaded', init);
+    return;
   }
 
-  // Try immediately
-  if (document.body) {
-    processFields();
-  }
-
-  // Try again after delays for React rendering
   setTimeout(processFields, 500);
   setTimeout(processFields, 1500);
   setTimeout(processFields, 3000);
 }
 
-// Start
 try {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
