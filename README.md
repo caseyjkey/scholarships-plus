@@ -24,6 +24,53 @@ The long-term vision is multi-year support: as a student progresses through thei
 - **Application Tracking**: Monitor submission status, award notifications, and renewal requirements
 - **Progress Analytics**: View application history and success rates across academic years
 - **Multi-Year Profiles**: Maintain a longitudinal record of growth and achievement
+- **Chrome Extension**: Auto-fill scholarship applications with AI-approved responses using sparkle icons
+
+## Chrome Extension
+
+The Scholarships Plus Chrome Extension helps you auto-fill scholarship applications with AI-approved responses.
+
+### Installation
+
+1. **Create extension icons** (optional - for development):
+   ```bash
+   cd chrome-extension/scripts
+   ./create-icons.sh
+   ```
+
+2. **Load the extension in Chrome**:
+   - Open `chrome://extensions/`
+   - Enable "Developer mode"
+   - Click "Load unpacked"
+   - Select the `chrome-extension/` directory
+
+3. **Start the development server**:
+   ```bash
+   npm run dev
+   ```
+
+4. **Use the extension**:
+   - Navigate to a SmarterSelect or OASIS scholarship application
+   - You'll see sparkle icons (✨) next to form fields
+   - Click a sparkle icon to fill the field with your saved response
+   - Open the sidebar to chat with the AI assistant about refining responses
+
+### Features
+
+- **Sparkle Icons** - Visual indicators showing which fields have saved responses
+- **Auto-Fill** - Click sparkle icons to instantly fill form fields
+- **Chat Sidebar** - AI assistant for refining responses and adding forgotten details
+- **Multi-Tab Support** - Work on multiple scholarships simultaneously
+- **Real-Time Sync** - Changes save immediately to the database
+
+### Authentication
+
+The extension uses JWT tokens for API authentication:
+1. Log in to the web app at `http://localhost:3000`
+2. The extension automatically exchanges your session for a JWT token
+3. All API calls include the JWT token for secure access
+
+For more details, see [`chrome-extension/README.md`](chrome-extension/README.md) and [`chrome-extension/EXTENSION_SETUP.md`](chrome-extension/EXTENSION_SETUP.md).
 
 ## Model Stack
 
@@ -173,3 +220,63 @@ Continuous integration and deployment are handled via GitHub Actions. All commit
 **Built with passion for Indigenous student success.**
 
 If you have questions, feedback, or want to contribute, please reach out.
+
+## Scholarship Scraper & Agentic Chat
+
+### Developer Scholarship Indexing
+
+The platform includes a Puppeteer-based scraper for indexing scholarships from external portals. This is a **developer-only** feature for building the scholarship database.
+
+**Available Portals:**
+- Native Forward Scholars (scholars.nativeforward.org)
+- AISES (www.aises.org)
+- Cobell Scholarship (cobellscholar.org)
+
+**Usage:**
+
+```bash
+# Scrape Native Forward scholarships
+npx tsx scripts/scrape-scholarships.ts nativeforward
+
+# Scrape AISES scholarships
+npx tsx scripts/scrape-scholarships.ts aises
+
+# Scrape Cobell scholarships
+npx tsx scripts/scrape-scholarships.ts cobell
+```
+
+**How it works:**
+1. Launches a visible browser window
+2. Opens the scholarship portal login page
+3. Developer logs in manually (handles 2FA, captchas, etc.)
+4. System captures session cookies
+5. Scrapes all scholarships from the portal
+6. Stores in database for agentic chat to use
+
+**Session Persistence:**
+- Admin sessions last 30 days
+- Re-run scraper anytime to refresh scholarship data
+- Session stored in `AdminPortalSession` table
+
+### Agentic Chat Flow
+
+The agentic chat helps students complete scholarship applications by:
+1. Listing available scraped scholarships
+2. Asking scholarship-specific questions
+3. Searching past essays for relevant content (RAG)
+4. Guiding user through each requirement
+5. Collecting application data in flexible JSON format
+
+**Architecture:**
+- Powered by scraped scholarship data
+- RAG integration with user's past essays
+- Flexible question/answer storage (JSON)
+- Supports referrals and varying requirements
+
+**Data Model:**
+- `ScrapedScholarship` - Indexed scholarship data
+- `Application` - Tracks application progress with flexible `answers` JSON column
+- `PortalSession` - User's portal sessions for submission
+
+---
+

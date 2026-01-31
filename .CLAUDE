@@ -1,0 +1,66 @@
+# Scholarships Plus - Development Notes
+
+## Port Configuration
+
+**IMPORTANT: This app MUST run on port 3030 only.**
+
+Port 3030 is the only port authorized for Google OAuth callbacks.
+
+### Configuration
+- Main app: `http://localhost:3030`
+- Metrics: `http://localhost:3010/metrics` (internal, for monitoring)
+- Remix dev server: Uses automatic port selection for WebSocket/HMR
+
+### Environment Variables
+```bash
+PORT=3030  # Main app port (set in package.json dev:remix script)
+```
+
+### Google OAuth Redirect URI
+```
+http://localhost:3030/auth/google/callback
+```
+
+This is configured in `.env`:
+```
+GOOGLE_OAUTH_REDIRECT_URI="http://localhost:3030/auth/google/callback"
+```
+
+## Test Credentials
+- Email: `test@mobile.test`
+- Password: `testmobile123`
+
+## Dev Server
+Start with: `npm run dev`
+
+The app will be accessible at: http://localhost:3030
+
+## Chrome Extension Development
+
+**CRITICAL: Extension files must be copied to `/mnt/c/Users/Omni/Development/chrome-extension`**
+
+Chrome loads the extension from the Windows mount path at `/mnt/c/Users/Omni/Development/chrome-extension`.
+
+**After any extension changes:**
+```bash
+# Copy updated files to Windows mount
+cp /home/trill/Development/scholarships-plus/chrome-extension/*.js /mnt/c/Users/Omni/Development/chrome-extension/
+cp /home/trill/Development/scholarships-plus/chrome-extension/*.json /mnt/c/Users/Omni/Development/chrome-extension/
+cp /home/trill/Development/scholarships-plus/chrome-extension/*.css /mnt/c/Users/Omni/Development/chrome-extension/
+
+# Then reload extension in chrome://extensions
+```
+
+**Extension paths:**
+- Source (Linux): `/home/trill/Development/scholarships-plus/chrome-extension/`
+- Loaded by Chrome (Windows mount): `/mnt/c/Users/Omni/Development/chrome-extension/`
+
+**API Configuration:**
+- HTTP: `http://localhost:3030` (for HTTP pages)
+- HTTPS: `https://localhost:3443` (for HTTPS pages - required for SmarterSelect)
+- Certificate must be trusted: Navigate to `https://localhost:3443/` and click "Proceed to localhost (unsafe)"
+
+**Common Issues:**
+- Icons in `select2-offscreen` labels: Content script cached → Navigate to about:blank, then back
+- Mixed content errors on HTTPS pages: Use `https://localhost:3443` API URL
+- Extension not picking up changes: Copy files to Windows mount path, reload extension

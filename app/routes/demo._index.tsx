@@ -416,7 +416,7 @@ export default function DemoPage() {
               <p className="text-sm text-yellow-800 mt-1">
                 <span id="extensionStatus">Checking for extension...</span>
               </p>
-              <div className="text-xs text-yellow-700 mt-2">
+              <div id="extensionNotInstalled" className="text-xs text-yellow-700 mt-2">
                 <strong>Not installed?</strong> Load the unpacked extension from the <code className="bg-yellow-100 px-1 rounded">chrome-extension/</code> folder in Chrome settings.
               </div>
             </div>
@@ -431,10 +431,22 @@ export default function DemoPage() {
             // Listen for extension detection event (works with CSP)
             function updateExtensionStatus(detected) {
               const statusEl = document.getElementById('extensionStatus');
+              const notInstalledEl = document.getElementById('extensionNotInstalled');
               if (detected) {
                 statusEl.innerHTML = '✅ <strong>Extension detected!</strong> Sparkle icons should appear on form fields.';
-                statusEl.parentElement.parentElement.classList.remove('bg-yellow-50', 'border-yellow-200');
-                statusEl.parentElement.parentElement.classList.add('bg-green-50', 'border-green-200');
+                // Get the outer banner container (4 levels up - the one with bg-yellow-50 class)
+                const bannerContainer = statusEl.parentElement.parentElement.parentElement.parentElement;
+                const headingEl = bannerContainer.querySelector('h3');
+                // Use direct style manipulation to override Tailwind classes
+                bannerContainer.style.setProperty('background-color', '#f0fdf4', 'important');
+                bannerContainer.style.setProperty('border-color', '#86efac', 'important');
+                statusEl.style.setProperty('color', '#166534', 'important');
+                if (headingEl) {
+                  headingEl.style.setProperty('color', '#14532d', 'important');
+                }
+                if (notInstalledEl) {
+                  notInstalledEl.style.display = 'none';
+                }
               } else {
                 statusEl.innerHTML = '❌ <strong>Extension not detected.</strong> Please install the browser extension.';
               }

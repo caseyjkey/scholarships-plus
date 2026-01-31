@@ -24,22 +24,26 @@ async function seed() {
     },
   });
 
-  await prisma.essay.create({
+  // Create mobile test user
+  const testEmail = "test@mobile.test";
+  await prisma.user.delete({ where: { email: testEmail } }).catch(() => {});
+
+  const testHashedPassword = await bcrypt.hash("testmobile123", 10);
+
+  const testUser = await prisma.user.create({
     data: {
-      essayPrompt: "My first prompt.",
-      body: "Hello, world!",
-      userId: user.id,
+      email: testEmail,
+      password: {
+        create: {
+          hash: testHashedPassword,
+        },
+      },
     },
   });
 
-  await prisma.essay.create({
-    data: {
-      essayPrompt: "My second prompt.",
-      body: "Hello, world!",
-      userId: user.id,
-    },
-  });
+  console.log(`Test user created: ${testEmail} / testmobile123`);
 
+  // Skip essay creation due to schema changes - user has been created
   console.log(`Database has been seeded. 🌱`);
 }
 

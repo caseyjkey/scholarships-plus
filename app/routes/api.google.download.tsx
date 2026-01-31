@@ -74,9 +74,11 @@ export async function action({ request }: ActionFunctionArgs) {
           fileName: result.value.fileName,
         });
       } else {
+        const error = result.reason;
+        console.error(`Failed to process file ${body.fileIds[index]}:`, error);
         failures.push({
           fileId: body.fileIds[index],
-          error: result.reason?.message || "Unknown error",
+          error: error?.message || "Unknown error",
         });
       }
     });
@@ -117,7 +119,7 @@ async function processDriveFile(
   // Create Essay record
   const essay = await prisma.essay.create({
     data: {
-      essayPrompt: `Imported from Google Drive: ${metadata.name}`,
+      essayPrompt: metadata.name,
       body: text,
       essay: "", // Empty initially - user can generate content
       user: {
@@ -286,41 +288,97 @@ async function exportGoogleSlides(
 }
 
 /**
- * Download binary file and attempt text extraction
+ * Download binary file and extract text
  *
- * NOTE: This is a simplified implementation that returns a placeholder.
- * Full implementation would require:
- * - PDF parsing (pdf-parse or similar)
- * - DOCX parsing (mammoth or similar)
- * - Proper error handling for binary files
- *
- * For now, we'll download the file and return a placeholder message.
+ * Downloads the file from Google Drive and extracts text based on file type.
+ * Supports PDF and DOCX files.
  */
 async function downloadFileAsText(
   fileId: string,
   accessToken: string,
   fileType: string
 ): Promise<string> {
-  // For binary files, we'd need to:
-  // 1. Download the file content
-  // 2. Parse based on file type
-  // 3. Extract text
+  // Download the file content as binary
+  const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  const response = await fetch(downloadUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
 
-  // Download the file metadata to get the download URL
-  const metadataResponse = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${fileId}?fields=webContentLink`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
-  );
-
-  if (!metadataResponse.ok) {
-    throw new Error(`Failed to get ${fileType} file metadata`);
+  if (!response.ok) {
+    throw new Error(`Failed to download ${fileType} file: ${response.status}`);
   }
 
-  // For now, return a placeholder indicating the file was downloaded
-  // but needs proper text extraction
-  return `[${fileType} file downloaded from Google Drive]\n\nNote: Full text extraction for ${fileType} files requires additional dependencies (pdf-parse, mammoth, etc.). The file has been imported and is ready for processing once those libraries are added.\n\nFile ID: ${fileId}`;
+  const buffer = Buffer.from(await response.arrayBuffer());
+
+  // Extract text based on file type
+  if (fileType === "PDF") {
+    return await extractTextFromPDF(buffer);
+  }
+
+  if (fileType === "DOCX") {
+    return await extractTextFromDOCX(buffer);
+  }
+
+  if (fileType === "RTF") {
+    // RTF files - basic extraction (strip formatting codes)
+    return extractTextFromRTF(buffer.toString('utf-8'));
+  }
+
+  if (fileType === "TXT") {
+    return buffer.toString('utf-8');
+  }
+
+  throw new Error(`Unsupported file type: ${fileType}`);
+}
+
+/**
+ * Extract text from PDF buffer using pdf-parse
+ */
+async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  try {
+    // Direct require works in Remix's server environment
+    const pdfParse = require('pdf-parse');
+    const data = await pdfParse(buffer);
+    return data.text;
+  } catch (error) {
+    console.error('Error parsing PDF:', error);
+    throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Extract text from DOCX buffer using mammoth
+ */
+async function extractTextFromDOCX(buffer: Buffer): Promise<string> {
+  try {
+    const mammoth = require('mammoth');
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
+  } catch (error) {
+    console.error('Error parsing DOCX:', error);
+    throw new Error(`Failed to extract text from DOCX: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Basic RTF text extraction - removes formatting codes
+ */
+function extractTextFromRTF(rtf: string): string {
+  // Remove RTF control words and keep visible text
+  let text = rtf
+    // Remove header
+    .replace(/{\\rtf1[\\s\\S]*?\\ pard\\s?/, '')
+    // Remove common control words
+    .replace(/\\[a-z]+(\\-?[0-9]+)?[ ]?/gi, '')
+    // Remove brackets
+    .replace(/[{}]/g, '')
+    // Clean up whitespace
+    .replace(/\\par/g, '\n')
+    .replace(/\\tab/g, '  ')
+    .replace(/\\line/g, '\n')
+    .trim();
+
+  return text;
 }

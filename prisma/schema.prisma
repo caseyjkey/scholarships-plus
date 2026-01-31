@@ -7,16 +7,29 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model User {
-  id    String @id @default(cuid())
-  email String @unique
+enum UserRole {
+  STUDENT
+  REFERRER
+  ADMIN
+}
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model User {
+  id                String             @id @default(cuid())
+  email             String             @unique
+  role              UserRole           @default(STUDENT)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   password          Password?
   essays            Essay[]
   googleCredentials GoogleCredential[]
+  applications      Application[]
+  portalSessions    PortalSession[]
+  scrapeJobs        ScrapeJob[]
+  globalKnowledge   GlobalKnowledge[]
+  applicationContexts ApplicationContext[]
+  fieldMappings     FieldMapping[]
+  indexingSessions  IndexingSession[]
 }
 
 model GoogleCredential {
@@ -42,15 +55,385 @@ model Password {
   userId String @unique
 }
 
+model Scholarship {
+  id          String   @id @default(cuid())
+  title       String
+  organization String?
+  description String
+  amount      Decimal? @db.Decimal(10, 2)
+  deadline    DateTime
+  requirements Json
+  source      String   @default("manual-entry")
+  sourceUrl   String?
+
+  // Filtering and display fields
+  classLevel        Json?    // ["undergraduate", "graduate", "phd", "professional"]
+  gpaMin            Decimal? @db.Decimal(3, 2)  // Minimum GPA required
+  gpaMax            Decimal? @db.Decimal(3, 2)  // Maximum GPA (for range filtering)
+  gpaRequired       Boolean  @default(false)
+  referralRequired  Int      @default(0)         // Number of referrals required
+  fullTimeRequired  Boolean  @default(false)     // Full-time enrollment required
+  enrollmentStatus  String?                         // "full_time", "part_time", "any", etc.
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  applications Application[]
+}
+
+model Application {
+  id                   String              @id @default(cuid())
+  userId               String
+  scholarshipId         String?
+  scrapedScholarshipId String?
+  status               String             @default("draft")
+  step                 Int                @default(0)
+  answers              Json?
+  submittedAt          DateTime?
+  awardedAt            DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scholarship        Scholarship?        @relation(fields: [scholarshipId], references: [id], onDelete: Cascade)
+  scrapedScholarship ScrapedScholarship? @relation(fields: [scrapedScholarshipId], references: [id], onDelete: Cascade)
+  essayDrafts        EssayDraft[]
+  conversations      ChatConversation[]
+  applicationContexts ApplicationContext[]
+
+  @@unique([userId, scholarshipId])
+  @@unique([userId, scrapedScholarshipId])
+  @@index([userId])
+  @@index([scholarshipId])
+  @@index([scrapedScholarshipId])
+}
+
 model Essay {
-  id          String @id @default(cuid())
-  essayPrompt String
-  body        String
-  essay       String
+  id                  String            @id @default(cuid())
+  essayPrompt         String
+  body                String
+  essay               String
+  wasAwarded          Boolean?
+  lastSimilarityCheck DateTime?
+  vectorId            String?
+  embedding           Unsupported("vector(1536)")?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId        String
+  similarities1 EssaySimilarity[] @relation("SimilaritySource")
+  similarities2 EssaySimilarity[] @relation("SimilarityTarget")
+  chunks        EssayChunk[]
+
+  @@index([userId])
+  @@index([wasAwarded])
+}
+
+model EssayChunk {
+  id         String   @id @default(cuid())
+  essayId    String
+  chunkIndex Int
+  content    String   @db.Text
+  displayId  Int
+  metadata   Json?
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  essay Essay @relation(fields: [essayId], references: [id], onDelete: Cascade)
+
+  @@unique([essayId, chunkIndex])
+  @@index([essayId, chunkIndex])
+}
+
+model EssayDraft {
+  id             String       @id @default(cuid())
+  applicationId  String
+  version        Int          @default(1)
+  approach       String       @default("narrative")
+  content        String       @db.Text
+  generationPrompt String?    @db.Text
+  sources        Json?
+  isFinalized    Boolean      @default(false)
+  isApproved     Boolean      @default(false)
+  status         String       @default("draft")
+  parentId       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  application  Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  parent       EssayDraft?    @relation("DraftParent", fields: [parentId], references: [id], onDelete: SetNull)
+  childDrafts  EssayDraft[]   @relation("DraftParent")
+
+  @@index([applicationId])
+  @@index([parentId])
+}
+
+model EssaySimilarity {
+  id              String   @id @default(cuid())
+  essayId         String
+  similarToId     String
+  score           Float
+  reason          String?
+  computedAt      DateTime @default(now())
+
+  essay        Essay  @relation("SimilaritySource", fields: [essayId], references: [id], onDelete: Cascade)
+  similarTo    Essay  @relation("SimilarityTarget", fields: [similarToId], references: [id], onDelete: Cascade)
+
+  @@unique([essayId, similarToId])
+  @@index([essayId])
+  @@index([similarToId])
+}
+
+model ChatConversation {
+  id            String   @id @default(cuid())
+  applicationId  String
+  userId        String
+  currentStep   String   @default("gathering")
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([userId])
+}
+
+
+// For storing admin sessions for scholarship indexing (developer only)
+model AdminPortalSession {
+  id           String   @id @default(cuid())
+  portal       String
+  cookies      Json
+  localStorage Json?
+  lastValid    DateTime @default(now())
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([portal])
+  @@index([expiresAt])
+}
+
+// For storing end-user sessions for submission
+model PortalSession {
+  id            String   @id @default(cuid())
+  userId        String
+  portal        String
+  cookies       Json
+  localStorage  Json?
+  sessionStorage Json?
+  lastValid     DateTime @default(now())
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, portal])
+  @@index([userId, portal])
+  @@index([expiresAt])
+}
+
+// For storing scraped scholarship data
+model ScrapedScholarship {
+  id                String   @id @default(cuid())
+  portal            String
+  title             String
+  description       String   @db.Text
+  amount            Float?
+  deadline          DateTime
+  requirements      Json
+  applicationUrl    String
+  sourceUrl         String
+  scrapeStatus      String   @default("pending")  // pending, success, error
+  scrapeError       String?  @db.Text
+  listPosition      Int?     // Position in the scholarship list (1-11)
+
+  // Application sections and questions for the two-phase flow
+  applicationSections Json?   // [{name, questions: [{id, label, type, required, options, word_limit}]}]
+
+  // Filtering and display fields
+  classLevel        Json?    // ["undergraduate", "graduate", "phd", "professional"]
+  gpaMin            Decimal? @db.Decimal(3, 2)  // Minimum GPA required
+  gpaMax            Decimal? @db.Decimal(3, 2)  // Maximum GPA (for range filtering)
+  gpaRequired       Boolean  @default(false)
+  referralRequired  Int      @default(0)         // Number of referrals required
+  fullTimeRequired  Boolean  @default(false)     // Full-time enrollment required
+  enrollmentStatus  String?                         // "full_time", "part_time", "any", etc.
+
+  scrapedAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  applications      Application[]
+  fieldMappings     FieldMapping[]
+  indexingSessions  IndexingSession[]
+
+  @@unique([sourceUrl])
+  @@index([portal, deadline])
+  @@index([deadline])
+  @@index([scrapeStatus])
+  @@index([gpaMin])
+}
+
+// For tracking scrape job progress
+model ScrapeJob {
+  id               String   @id @default(cuid())
+  action           String                      // "discover", "scrapeAll", "scrapeOne"
+  status           String   @default("pending") // "pending", "running", "completed", "error"
+  currentStep      Int      @default(0)
+  totalSteps       Int      @default(0)
+  message          String?                     // Current status message
+  result           Json?                       // Final result data
+  error            String?  @db.Text
+  scholarshipId    String?                     // For scrapeOne actions
+  scholarshipTitle String?                     // For child jobs - which scholarship is being scraped
+  parentJobId      String?                     // For child jobs - links to parent scrapeAll job
+  userId           String                      // Who triggered the job
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentJob       ScrapeJob?  @relation("JobHierarchy", fields: [parentJobId], references: [id], onDelete: SetNull)
+  childJobs       ScrapeJob[] @relation("JobHierarchy")
+
+  @@index([userId])
+  @@index([status])
+  @@index([parentJobId])
+  @@index([createdAt])
+}
+
+// For bookmarklet session capture authentication
+model SessionToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  used      Boolean  @default(false)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  userId String
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// Global knowledge base - shared across all applications
+model GlobalKnowledge {
+  id          String   @id @default(cuid())
+  userId      String
+
+  type        String   // "experience", "skill", "achievement", "value", "goal"
+  category    String?  // "leadership", "community_service", "academic", etc.
+  title       String   // "Food bank volunteer coordinator"
+  content     String   @db.Text  // Full details, story, context
+  source      String?  // "interview", "essay", "manual_entry", "inference"
+  sourceEssay String?  // If from essay, which one
+  confidence  Float    @default(0.5)  // How confirmed is this? 0-1
+  verified    Boolean  @default(false)  // User explicitly confirmed this
+
+  // For semantic search
+  embedding   Unsupported("vector(1536)")?
+
+  // Usage tracking - when/how this has been used
+  useCount    Int      @default(0)
+  lastUsedAt  DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([userId, category])
+  @@index([userId, confidence])
+  @@index([userId, verified])
+}
+
+// Application-specific context - isolated per application
+model ApplicationContext {
+  id              String   @id @default(cuid())
+  userId          String
+  applicationId   String   // Links to Application table
+
+  sectionId       String   // "essay_1", "short_answer_3", "leadership_experience"
+  sectionType     String   // "essay", "short_answer", "text_input", "select"
+  questionSummary String   @db.Text  // The question/prompt
+  responseDraft   String?  @db.Text  // Drafted response for this section
+
+  // What was referenced in THIS application
+  referencedGlobalKnowledge String[]  // IDs from GlobalKnowledge used in this response
+  referencedOtherSections   String[]  // Other section IDs referenced ("essay_1")
+
+  // Themes and tone for maintaining coherence
+  themes          String[]  // ["resilience", "community_impact", "growth"]
+  tone            String?   // "inspirational", "pragmatic", "personal"
+
+  // Status tracking
+  status          String   @default("draft")  // "draft", "reviewed", "approved", "submitted"
+  userFeedback    String?  @db.Text
+
+  // Agent's understanding of this application
+  applicationNarrative String?  @db.Text  // "Story-focused on community service leadership"
+  keyStories       Json?  // [{title, summary, whereUsed}]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application     Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, sectionId])
+  @@index([applicationId])
+  @@index([userId])
+  @@index([status])
+}
+
+// Field mappings for scholarships - maps form fields to approved responses
+model FieldMapping {
+  id            String   @id @default(cuid())
+  scholarshipId String
+  userId        String
+  fieldName     String   // e.g., "first_name", "gpa", "leadership_experience"
+  fieldLabel    String   // e.g., "First Name", "GPA", "Describe your leadership experience"
+  fieldType     String   // e.g., "text", "select", "radio", "textarea"
+  cssSelector   String?  // CSS selector for robust element matching
+  xpath         String?  // Fallback XPath locator
+  position      Int?     // Nth field of this type on page (0-indexed)
+  approvedValue String?  @db.Text // The AI-approved response
+  options       Json?    // For select/radio fields: [{label, value}]
+  source        String   @default("agent") // "agent", "user", "import"
+  approved      Boolean  @default(false) // User explicitly approved
+  approvedAt    DateTime?
+  generating    Boolean  @default(false) // AI generation in progress
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scholarship   ScrapedScholarship @relation(fields: [scholarshipId], references: [id], onDelete: Cascade)
+
+  @@unique([scholarshipId, fieldName])
+  @@index([scholarshipId])
+  @@index([userId])
+  @@index([scholarshipId, approved])
+  @@index([scholarshipId, generating])
+}
+
+// Indexing sessions track extension-based indexing
+model IndexingSession {
+  id            String   @id @default(cuid())
+  scholarshipId String
+  userId        String
+  status        String   @default("pending") // pending, active, completed, failed
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scholarship ScrapedScholarship @relation(fields: [scholarshipId], references: [id], onDelete: Cascade)
+
+  @@index([scholarshipId])
+  @@index([userId])
+  @@index([status])
 }

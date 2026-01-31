@@ -97,3 +97,13 @@ export async function logout(request: Request) {
     },
   });
 }
+
+export async function requireAdminRole(request: Request): Promise<void> {
+  const user = await requireUser(request);
+
+  // Check if user has ADMIN role
+  // @ts-ignore - role field exists in database
+  if (user.role !== "ADMIN") {
+    throw redirect("/settings?error=unauthorized");
+  }
+}

@@ -20,18 +20,21 @@ console.log('Scholarships Plus: Content script START');
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
 .sp-tooltip{position:absolute!important;bottom:calc(100% + 8px)!important;left:50%!important;transform:translateX(-50%)!important;padding:6px 10px!important;background:rgba(31,41,55,.95)!important;color:#fff!important;font-size:11px!important;font-family:system-ui,-apple-system,sans-serif!important;white-space:nowrap!important;border-radius:4px!important;z-index:9999999!important;pointer-events:none!important;opacity:0!important;transition:opacity .2s ease!important;max-width:200px!important;text-align:center!important;line-height:1.3!important}
 .sp-sparkle-icon:hover .sp-tooltip{opacity:1!important}
+.sp-demo-banner{position:fixed!important;top:20px!important;left:50%!important;transform:translateX(-50%)!important;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)!important;color:white!important;padding:12px 20px!important;border-radius:8px!important;font-family:system-ui,-apple-system,sans-serif!important;font-size:14px!important;z-index:9999999!important;box-shadow:0 4px 12px rgba(102,126,234,.4)!important;transition:opacity .5s ease!important;text-align:center!important;line-height:1.4!important;max-width:90vw!important}
 `;
   document.head.appendChild(style);
   console.log('Scholarships Plus: CSS injected directly');
 })();
 
 // Signal to page that extension is loaded
-var event = new CustomEvent('scholarshipsPlusExtensionLoaded', { detail: { version: '0.3.5' } });
+var event = new CustomEvent('scholarshipsPlusExtensionLoaded', { detail: { version: '0.5.9' } });
 window.dispatchEvent(event);
 console.log('Scholarships Plus: Extension detection event dispatched');
 
 // Configuration
 var API_BASE_URL = 'https://localhost:3443';
+var WEBAPP_BASE_URL = 'http://localhost:3030';  // Updated to match dev server port
+var EXTENSION_AUTH_URL = WEBAPP_BASE_URL + '/extension-auth';  // Dedicated extension auth page
 var POLL_INTERVAL = 3000;
 var MAX_POLLS = 40;
 
@@ -41,6 +44,7 @@ var fieldMappings = {};
 var fieldElements = {}; // Map fieldName -> DOM element
 var labelsWithSparkles = new Set(); // Track labels that have sparkles to avoid duplicates
 var scholarshipId = null;
+var scholarshipTitle = null;
 var applicationId = null;
 var pollCount = 0;
 var pollTimer = null;
@@ -50,6 +54,38 @@ var authToken = null;
 var currentConversation = null;
 var conversationModal = null;
 var currentFieldName = null;
+
+/**
+ * Extract scholarship title from page content
+ * Tries multiple selectors to find the scholarship name
+ */
+function extractScholarshipTitle() {
+  // Try common selectors for scholarship titles
+  var selectors = [
+    'h1',                      // Main heading
+    'title',                   // Page title
+    '[class*="title"]',        // Elements with "title" in class
+    '[id*="title"]',           // Elements with "title" in id
+    '.program-title',          // Common class
+    '.scholarship-title',      // Common class
+    'h2',                      // Secondary heading
+  ];
+
+  for (var i = 0; i < selectors.length; i++) {
+    var elements = document.querySelectorAll(selectors[i]);
+    for (var j = 0; j < elements.length; j++) {
+      var text = elements[j].textContent.trim();
+      // Skip empty text, navigation links, or very short text
+      if (text && text.length > 10 && !text.includes('Click to') && !text.includes('Apply')) {
+        console.log('[SCHOLARSHIP] Found title from ' + selectors[i] + ':', text.substring(0, 50));
+        return text.substring(0, 200); // Limit length
+      }
+    }
+  }
+
+  console.log('[SCHOLARSHIP] No title found, using fallback');
+  return 'Scholarship Application';
+}
 
 /**
  * Generate CSS selector for an element
@@ -163,16 +199,82 @@ function findLabelForElement(element) {
   var label = null;
   var source = '';
 
+  console.log('[FINDLABEL] Starting for element:', element.name || element.id, element.type);
+
   // STEP 1: Handle Radio & Checkbox Groups (Semantic Grouping)
   if ((element.type === 'radio' || element.type === 'checkbox') && element.name) {
     var groupInputs = document.querySelectorAll('input[name="' + element.name + '"]');
     if (groupInputs.length > 1) {
       var lca = findLCA(Array.from(groupInputs));
       if (lca) {
-        // Look for legend, label without for, or text element in the LCA
-        label = lca.querySelector('legend, label:not([for]), p, span, div') ||
-                lca.previousElementSibling;
-        if (label) source = 'radio-group-lca';
+        // First, try to find a legend or fieldset label (question label)
+        label = lca.querySelector('legend');
+        if (label && label.textContent.trim().length > 5) {
+          source = 'radio-group-legend';
+        } else {
+          // No legend, look for question label BEFORE the radio group
+          // Check if LCA is inside a fieldset - use the fieldset's legend
+          var fieldset = lca.closest('fieldset');
+          if (fieldset && fieldset !== lca) {
+            var fieldsetLegend = fieldset.querySelector('legend');
+            if (fieldsetLegend && fieldsetLegend.textContent.trim().length > 5) {
+              label = fieldsetLegend;
+              source = 'fieldset-legend';
+            }
+          }
+
+          // Still no label? Look for a label or text element BEFORE the first radio input
+          if (!label) {
+            var firstInput = groupInputs[0];
+            var parentContainer = firstInput.closest('div, fieldset, section, article');
+
+            if (parentContainer) {
+              // Look for elements BEFORE the first radio option that have meaningful text
+              // These are typically the question labels
+              var candidates = parentContainer.querySelectorAll('label, p, span, div, h1, h2, h3, h4, h5, h6');
+
+              for (var i = 0; i < candidates.length; i++) {
+                var candidate = candidates[i];
+
+                // Skip if this candidate is a label wrapping a radio input (option label)
+                if (candidate.tagName === 'LABEL' &&
+                    (candidate.querySelector('input[type="radio"]') ||
+                     candidate.querySelector('input[type="checkbox"]'))) {
+                  continue;
+                }
+
+                // Skip if this candidate is a descendant of another label (nested option label)
+                if (candidate.closest('label') !== null) {
+                  continue;
+                }
+
+                // Check if this candidate appears BEFORE the first radio input
+                var candidateRect = candidate.getBoundingClientRect();
+                var inputRect = firstInput.getBoundingClientRect();
+
+                // Use DOM position comparison rather than viewport coordinates
+                // Candidate must come before the input in DOM order OR be visually above
+                var position = document.compareDocumentPosition(candidate, firstInput);
+                var isBefore = !!(position & Node.DOCUMENT_POSITION_PRECEDING);
+
+                if (isBefore || candidateRect.top < inputRect.top - 10) {
+                  var textLength = candidate.textContent.trim().length;
+                  // Question labels are typically longer than option labels
+                  if (textLength > 10 && textLength > (label ? label.textContent.trim().length : 0)) {
+                    label = candidate;
+                    source = 'radio-group-before-input';
+                  }
+                }
+              }
+            }
+          }
+
+          // Last resort: check previous sibling of LCA
+          if (!label) {
+            label = lca.previousElementSibling;
+            if (label) source = 'radio-group-lca-prev-sibling';
+          }
+        }
       }
     }
   }
@@ -218,9 +320,11 @@ function findLabelForElement(element) {
 
     // First, try to find a label in a header within the same container
     var header = searchRoot.querySelector('header label, .question-label, .field-label, .label');
+    console.log('[FINDLABEL] header found:', !!header, 'text length:', header ? header.textContent.trim().length : 0);
     if (header && header.textContent.trim().length > 5) {
       label = header;
       source = 'container-header';
+      console.log('[FINDLABEL] Using header label, text:', header.textContent.trim().substring(0, 50));
     }
 
     // If no header label, look for the first meaningful label in the container
@@ -255,6 +359,7 @@ function findLabelForElement(element) {
     }
   }
 
+  console.log('[FINDLABEL] Returning label:', !!label, 'source:', source, 'text:', label ? label.textContent.trim().substring(0, 40) : 'none');
   return { label: label, source: source };
 }
 
@@ -306,7 +411,9 @@ function extractAllFields() {
   var fieldIndex = 0;
   var processedRadioGroups = {};
 
+  console.log('[SPARKLE] extractAllFields: Starting extraction...');
   var elements = document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea, select');
+  console.log('[SPARKLE] Found ' + elements.length + ' total form elements');
 
   elements.forEach(function(element) {
     if (element.hasAttribute('data-sparkle-added')) return;
@@ -334,14 +441,6 @@ function extractAllFields() {
 
     // Only add if we found a label
     if (fieldInfo.labelElement) {
-      // Skip if this label already has a sparkle
-      if (labelsWithSparkles.has(fieldInfo.labelElement)) {
-        console.log('[SPARKLE] Skipping duplicate label:', fieldInfo.fieldLabel);
-        return;
-      }
-
-      labelsWithSparkles.add(fieldInfo.labelElement);
-
       fields.push(fieldInfo);
       fieldIndex++;
     }
@@ -366,6 +465,10 @@ function getAuthToken(callback) {
  * Submit extracted fields to backend API
  */
 function submitFieldsToAPI(fields, callback) {
+  // Extract scholarship title from page content before submitting
+  var extractedTitle = extractScholarshipTitle();
+  console.log('[SCHOLARSHIP] Submitting with title:', extractedTitle);
+
   getAuthToken(function(token) {
     if (!token) {
       console.error('Scholarships Plus: No auth token found');
@@ -381,6 +484,7 @@ function submitFieldsToAPI(fields, callback) {
       },
       body: JSON.stringify({
         url: window.location.href,
+        scholarshipTitle: extractedTitle,
         fields: fields,
       }),
     })
@@ -393,11 +497,14 @@ function submitFieldsToAPI(fields, callback) {
     .then(function(data) {
       console.log('Scholarships Plus: Fields submitted, response:', data);
       scholarshipId = data.scholarshipId;
+      scholarshipTitle = data.scholarshipTitle;
       applicationId = data.applicationId;
 
       fieldMappings = {};
       if (data.mappings && Array.isArray(data.mappings)) {
         data.mappings.forEach(function(mapping) {
+          // Defensive: skip undefined/null mappings
+          if (!mapping || !mapping.fieldName) return;
           fieldMappings[mapping.fieldName] = mapping;
         });
       }
@@ -442,6 +549,9 @@ function pollForUpdates() {
     .then(function(data) {
       if (data.mappings && Array.isArray(data.mappings)) {
         data.mappings.forEach(function(mapping) {
+          // Defensive: skip undefined/null mappings
+          if (!mapping || !mapping.fieldName) return;
+
           var existing = fieldMappings[mapping.fieldName];
 
           if (mapping.approvedValue && (!existing || !existing.approvedValue)) {
@@ -513,7 +623,6 @@ function createSparkleIcon(state) {
       img.style.width = '20px';
       img.style.height = '20px';
       img.style.display = 'block';
-      img.style.marginTop = '18px';
 
       if (state === 'empty') {
         img.style.filter = 'grayscale(100%) brightness(0.4) opacity(0.5)';
@@ -548,7 +657,7 @@ function createSparkleIcon(state) {
 /**
  * Add sparkle icon to a field
  */
-function addSparkleIcon(input, fieldName, labelElement) {
+function addSparkleIcon(input, fieldName, labelElement, fieldLabel) {
   // Check if this label already has a sparkle or is being processed
   if (labelElement) {
     if (labelElement._addingSparkle) {
@@ -601,7 +710,7 @@ function addSparkleIcon(input, fieldName, labelElement) {
     if (state === 'generating') return;
 
     // Open conversation for all states except generating
-    openConversation(fieldName, input, icon);
+    openConversation(fieldName, input, icon, fieldLabel);
   });
 
   input._sparkleIcon = icon;
@@ -712,23 +821,36 @@ function transitionToFilled(input) {
 /**
  * Open conversation modal
  */
-function openConversation(fieldName, input, icon) {
+function openConversation(fieldName, input, icon, extractedLabel) {
   currentFieldName = fieldName;
   var mapping = fieldMappings[fieldName];
-  var fieldLabel = mapping ? mapping.fieldLabel : fieldName;
+  // Use extracted label if available, otherwise fall back to mapping label or fieldName
+  var fieldLabel = extractedLabel || (mapping ? mapping.fieldLabel : fieldName);
 
   closeConversation();
 
-  conversationModal = createConversationModal(fieldName, fieldLabel, input, icon);
+  conversationModal = createConversationModal(fieldName, fieldLabel, input, icon, scholarshipTitle);
   document.body.appendChild(conversationModal);
 
-  // If we have context (previous approvedValue), show it
-  if (mapping && mapping.approvedValue) {
-    addMessageToConversation('agent', 'Current response:', mapping.approvedValue);
-  } else {
-    // Send initial greeting to show application context
-    sendInitialGreeting(fieldName, fieldLabel);
-  }
+  // Check authentication status first
+  getAuthToken(function(token) {
+    if (!token) {
+      // Not logged in - show login prompt
+      addMessageToConversation('agent', 'Authentication Required',
+        'Please log in to use the AI assistant. Click the link below to authenticate:<br><br>' +
+        '<a href="' + EXTENSION_AUTH_URL + '" target="_blank" style="color:#3b82f6;text-decoration:underline;font-weight:bold;">🔗 Log in to Scholarships Plus</a>',
+        false, true);
+      return;
+    }
+
+    // If we have context (previous approvedValue), show it
+    if (mapping && mapping.approvedValue) {
+      addMessageToConversation('agent', 'Current response:', mapping.approvedValue);
+    } else {
+      // Send initial greeting to show application context
+      sendInitialGreeting(fieldName, fieldLabel);
+    }
+  });
 }
 
 /**
@@ -740,6 +862,7 @@ function sendInitialGreeting(fieldName, fieldLabel) {
     return;
   }
 
+  // Show loading indicator
   var loadingEl = document.getElementById('sp-conversation-loading');
   if (loadingEl) {
     loadingEl.style.display = 'flex';
@@ -747,7 +870,9 @@ function sendInitialGreeting(fieldName, fieldLabel) {
 
   getAuthToken(function(token) {
     if (!token) {
-      if (loadingEl) loadingEl.style.display = 'none';
+      // Hide loading indicator - always get current reference
+      var currentLoadingEl = document.getElementById('sp-conversation-loading');
+      if (currentLoadingEl) currentLoadingEl.style.display = 'none';
       addMessageToConversation('agent', 'Assistant', 'Hello! I can help you craft a response for this field. What would you like to say?', false);
       return;
     }
@@ -773,7 +898,9 @@ function sendInitialGreeting(fieldName, fieldLabel) {
       return response.json();
     })
     .then(function(data) {
-      if (loadingEl) loadingEl.style.display = 'none';
+      // Hide loading indicator - always get current reference
+      var currentLoadingEl = document.getElementById('sp-conversation-loading');
+      if (currentLoadingEl) currentLoadingEl.style.display = 'none';
 
       if (data.response) {
         addMessageToConversation('agent', 'Assistant', data.response, false);
@@ -781,7 +908,9 @@ function sendInitialGreeting(fieldName, fieldLabel) {
     })
     .catch(function(error) {
       console.error('Scholarships Plus: Greeting API error:', error);
-      if (loadingEl) loadingEl.style.display = 'none';
+      // Hide loading indicator - always get current reference
+      var currentLoadingEl = document.getElementById('sp-conversation-loading');
+      if (currentLoadingEl) currentLoadingEl.style.display = 'none';
       addMessageToConversation('agent', 'Assistant', 'Hello! I can help you craft a response for this field. What would you like to say?', false);
     });
   });
@@ -790,7 +919,7 @@ function sendInitialGreeting(fieldName, fieldLabel) {
 /**
  * Create conversation modal
  */
-function createConversationModal(fieldName, fieldLabel, input, icon) {
+function createConversationModal(fieldName, fieldLabel, input, icon, scholarshipTitle) {
   var modal = document.createElement('div');
   modal.className = 'sp-conversation-modal';
   modal.id = 'sp-conversation-modal';
@@ -800,7 +929,8 @@ function createConversationModal(fieldName, fieldLabel, input, icon) {
   header.className = 'sp-conversation-header';
 
   var heading = document.createElement('h3');
-  heading.textContent = fieldLabel;
+  // Use scholarship title as the modal title, fallback to field label if not available
+  heading.textContent = scholarshipTitle || fieldLabel || fieldName;
 
   var closeBtn = document.createElement('button');
   closeBtn.className = 'sp-conversation-close';
@@ -882,9 +1012,45 @@ window.closeConversation = function() {
 };
 
 /**
+ * Simple Markdown Parser
+ * Supports: bold, italic, links, line breaks, paragraphs
+ */
+function parseMarkdown(text) {
+  if (!text) return '';
+
+  // Escape HTML first to prevent XSS
+  var html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Links [text](url) - must be done before other processing
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, text, url) {
+    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + text + '</a>';
+  });
+
+  // Bold **text** or __text__
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+
+  // Italic *text* or _text_ (but not if already part of bold)
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+
+  // Line breaks - convert double newlines to paragraphs
+  var paragraphs = html.split(/\n\n+/);
+  var result = paragraphs.map(function(para) {
+    // Single line breaks within paragraphs become <br>
+    return '<p>' + para.replace(/\n/g, '<br>') + '</p>';
+  }).join('');
+
+  return result;
+}
+
+/**
  * Add message to conversation
  */
-function addMessageToConversation(type, label, content, withApproval) {
+function addMessageToConversation(type, label, content, withApproval, allowHTML) {
   var messagesContainer = document.getElementById('sp-conversation-messages');
   if (!messagesContainer) return;
 
@@ -897,7 +1063,16 @@ function addMessageToConversation(type, label, content, withApproval) {
 
   var contentDiv = document.createElement('div');
   contentDiv.className = 'sp-message-content';
-  contentDiv.textContent = content;
+  // Parse markdown for agent messages, use plain text for user messages
+  if (allowHTML) {
+    contentDiv.innerHTML = content;
+  } else if (type === 'agent' || type === 'suggestion') {
+    // Parse markdown for AI responses (with HTML escaping for security)
+    contentDiv.innerHTML = parseMarkdown(content);
+  } else {
+    // Use plain text for user messages
+    contentDiv.textContent = content;
+  }
 
   messageDiv.appendChild(labelDiv);
   messageDiv.appendChild(contentDiv);
@@ -956,11 +1131,14 @@ function sendUserMessage() {
 }
 
 /**
- * Call chat API for field conversation
+ * Call chat API for field conversation or general chat
  */
 function callChatAPI(userMessage) {
-  if (!currentFieldName || !scholarshipId || !applicationId) {
+  // For field-specific chat, require currentFieldName
+  // For general chat, currentFieldName is null but we still need scholarshipId/applicationId
+  if (!scholarshipId || !applicationId) {
     console.error('Scholarships Plus: Missing context for chat');
+    addMessageToConversation('agent', 'Error', 'Sorry, I need more context to help. Please navigate to a scholarship application.', false);
     return;
   }
 
@@ -977,13 +1155,28 @@ function callChatAPI(userMessage) {
   getAuthToken(function(token) {
     if (!token) {
       console.error('Scholarships Plus: No auth token for chat');
-      if (loadingEl) loadingEl.style.display = 'none';
+      var currentLoadingEl = document.getElementById('sp-conversation-loading');
+      if (currentLoadingEl) currentLoadingEl.style.display = 'none';
       if (inputField) inputField.disabled = false;
       if (sendBtn) sendBtn.disabled = false;
       return;
     }
 
-    var mapping = fieldMappings[currentFieldName];
+    // Build request body - include field info only if in field-specific mode
+    var requestBody = {
+      scholarshipId: scholarshipId,
+      applicationId: applicationId,
+      message: userMessage,
+    };
+
+    // Add field-specific parameters only if we're in field-specific mode
+    if (currentFieldName) {
+      var mapping = fieldMappings[currentFieldName];
+      requestBody.fieldName = currentFieldName;
+      requestBody.fieldLabel = mapping ? mapping.fieldLabel : currentFieldName;
+      requestBody.fieldType = mapping ? mapping.fieldType : 'text';
+      requestBody.currentValue = mapping ? mapping.approvedValue : null;
+    }
 
     fetch(API_BASE_URL + '/api/extension/chat', {
       method: 'POST',
@@ -991,15 +1184,7 @@ function callChatAPI(userMessage) {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token,
       },
-      body: JSON.stringify({
-        scholarshipId: scholarshipId,
-        applicationId: applicationId,
-        fieldName: currentFieldName,
-        fieldLabel: mapping ? mapping.fieldLabel : currentFieldName,
-        fieldType: mapping ? mapping.fieldType : 'text',
-        message: userMessage,
-        currentValue: mapping ? mapping.approvedValue : null,
-      }),
+      body: JSON.stringify(requestBody),
     })
     .then(function(response) {
       if (!response.ok) {
@@ -1008,27 +1193,37 @@ function callChatAPI(userMessage) {
       return response.json();
     })
     .then(function(data) {
-      if (loadingEl) loadingEl.style.display = 'none';
+      // Hide loading indicator - always get current reference
+      var currentLoadingEl = document.getElementById('sp-conversation-loading');
+      if (currentLoadingEl) currentLoadingEl.style.display = 'none';
       if (inputField) inputField.disabled = false;
       if (sendBtn) sendBtn.disabled = false;
 
       if (data.response) {
-        // Add as suggestion with approval buttons
-        addMessageToConversation('suggestion', 'Suggested response:', data.response, true);
+        // In field-specific mode, show as suggestion with approval buttons
+        // In general chat mode, show as regular agent message
+        if (currentFieldName) {
+          addMessageToConversation('suggestion', 'Suggested response:', data.response, true);
 
-        // Store the suggested response for approval
-        if (!currentConversation) {
-          currentConversation = [];
+          // Store the suggested response for approval
+          if (!currentConversation) {
+            currentConversation = [];
+          }
+          currentConversation.push({
+            type: 'suggestion',
+            content: data.response,
+          });
+        } else {
+          // General chat mode - just show the response
+          addMessageToConversation('agent', 'Assistant', data.response, false);
         }
-        currentConversation.push({
-          type: 'suggestion',
-          content: data.response,
-        });
       }
     })
     .catch(function(error) {
       console.error('Scholarships Plus: Chat API error:', error);
-      if (loadingEl) loadingEl.style.display = 'none';
+      // Hide loading indicator - always get current reference
+      var currentLoadingEl = document.getElementById('sp-conversation-loading');
+      if (currentLoadingEl) currentLoadingEl.style.display = 'none';
       if (inputField) inputField.disabled = false;
       if (sendBtn) sendBtn.disabled = false;
 
@@ -1216,10 +1411,40 @@ function showBanner(totalFields, readyCount, generatingCount) {
 }
 
 /**
+ * Show authentication required banner
+ */
+function showAuthBanner() {
+  // Check if banner already exists
+  if (document.querySelector('.sp-auth-banner')) return;
+
+  var banner = document.createElement('div');
+  banner.className = 'sp-demo-banner sp-auth-banner';
+  banner.innerHTML = '✨ <strong>Scholarships+ Extension</strong><br>Please <a href="' + EXTENSION_AUTH_URL + '" target="_blank" style="color:white;text-decoration:underline;font-weight:bold;">log in</a> to use the AI assistant';
+
+  // Add inline style to keep banner visible (doesn't auto-dismiss)
+  banner.style.position = 'fixed';
+  banner.style.top = '20px';
+  banner.style.left = '50%';
+  banner.style.transform = 'translateX(-50%)';
+  banner.style.background = 'linear-gradient(135deg, #ef4444 0%, #f97316 100%)'; // Red/orange for auth required
+
+  document.body.appendChild(banner);
+}
+
+/**
  * Process fields and add sparkles
  */
 function processFields() {
   console.log('Scholarships Plus: Processing fields...');
+
+  // Check authentication status first
+  getAuthToken(function(token) {
+    if (!token) {
+      // Not logged in - show auth banner
+      showAuthBanner();
+      console.log('Scholarships Plus: User not authenticated, showing login banner');
+    }
+  });
 
   // Clear old sparkles and reset tracking
   var oldSparkles = document.querySelectorAll('.sp-sparkle-icon');
@@ -1253,21 +1478,18 @@ function processFields() {
   var sparkleCount = 0;
 
   extractedFields.forEach(function(fieldInfo) {
+    // Defensive: skip undefined entries
+    if (!fieldInfo || !fieldInfo.fieldName) return;
+
     // Use the stored element reference directly
     var input = fieldInfo.element || document.querySelector('[name="' + fieldInfo.fieldName + '"], #' + fieldInfo.fieldName);
-    if (!input) return;
-
-    // Skip if no label element - can't position sparkle properly
-    if (!fieldInfo.labelElement) {
-      console.log('[SPARKLE] Skipping field without label:', fieldInfo.fieldName);
+    if (!input) {
+      console.log('[SPARKLE] Skipping - no input element found for:', fieldInfo.fieldName);
       return;
     }
 
-    // Use label element as unique key (not text content)
-    if (labelsWithSparkles.has(fieldInfo.labelElement)) return;
-    labelsWithSparkles.add(fieldInfo.labelElement);
-
-    addSparkleIcon(input, fieldInfo.fieldName, fieldInfo.labelElement);
+    // Use the new holistic injection method
+    injectSparkleHolistically(input, fieldInfo.fieldName, fieldInfo.fieldLabel);
     sparkleCount++;
   });
 
@@ -1285,6 +1507,9 @@ function processFields() {
 
     // Update sparkle states based on API response
     extractedFields.forEach(function(fieldInfo) {
+      // Defensive: skip undefined entries
+      if (!fieldInfo || !fieldInfo.fieldName) return;
+
       var mapping = fieldMappings[fieldInfo.fieldName];
       if (mapping) {
         if (mapping.approvedValue) {
@@ -1311,11 +1536,226 @@ function processFields() {
 }
 
 /**
+ * Find Lowest Common Ancestor of multiple elements
+ */
+function findLCA(elements) {
+  if (elements.length === 0) return null;
+  if (elements.length === 1) return elements[0];
+
+  // Build paths using ES5 syntax
+  var paths = [];
+  for (var pi = 0; pi < elements.length; pi++) {
+    var path = [];
+    var el = elements[pi];
+    while (el) {
+      path.push(el);
+      el = el.parentElement;
+    }
+    path.reverse();
+    paths.push(path);
+  }
+
+  // Find minimum path length
+  var minLength = paths[0].length;
+  for (var pj = 1; pj < paths.length; pj++) {
+    if (paths[pj].length < minLength) {
+      minLength = paths[pj].length;
+    }
+  }
+
+  var lca = paths[0][0];
+  for (var i = 0; i < minLength; i++) {
+    var current = paths[0][i];
+    var allMatch = true;
+    for (var pk = 0; pk < paths.length; pk++) {
+      if (paths[pk][i] !== current) {
+        allMatch = false;
+        break;
+      }
+    }
+    if (allMatch) {
+      lca = current;
+    } else {
+      break;
+    }
+  }
+  return lca;
+}
+
+/**
+ * Holistically inject sparkle for an input field
+ * Finds the logical block and question text to position sparkle correctly
+ */
+function injectSparkleHolistically(input, fieldName, fieldLabel) {
+  if (input.dataset.hasSparkleAdded) return;
+
+  // 1. Identify the "Logical Block"
+  // We climb until we find a container that likely holds the whole question
+  // Standard scholarship apps use: article, fieldset, tr, or div.form-row
+  var logicalBlock = input.closest('article, fieldset, tr, [class*="question"], [class*="form-row"], [class*="field"], .question, .field');
+
+  if (!logicalBlock) {
+    console.log('[SPARKLE] No logical block found for:', fieldName);
+    return;
+  }
+
+  // 2. Locate the "Question Text" (The Anchor)
+  var anchor = null;
+
+  // PRIORITY A: Find a label that DOES NOT contain an input (direct label for the question)
+  // This is preferred because we want the sparkle inline with the label text
+  var labels = logicalBlock.querySelectorAll('label');
+  for (var j = 0; j < labels.length; j++) {
+    var lab = labels[j];
+    if (!lab.querySelector('input, select, textarea')) {
+      anchor = lab;
+      break;
+    }
+  }
+
+  // PRIORITY B: Look for legend (used in fieldsets)
+  if (!anchor) {
+    anchor = logicalBlock.querySelector('legend');
+  }
+
+  // PRIORITY C: Look for header, but check if it contains a label and use that instead
+  if (!anchor) {
+    var header = logicalBlock.querySelector('header');
+    if (header) {
+      // Check if header contains a label - if so, use the label
+      var headerLabel = header.querySelector('label');
+      if (headerLabel && !headerLabel.querySelector('input, select, textarea')) {
+        anchor = headerLabel;
+      } else {
+        anchor = header;
+      }
+    }
+  }
+
+  // PRIORITY C: Group Logic for Radios/Checkboxes
+  if (!anchor && (input.type === 'radio' || input.type === 'checkbox')) {
+    var groupName = input.getAttribute('name');
+    var groupInputs = document.querySelectorAll('input[name="' + groupName + '"]');
+    var groupArray = [];
+    for (var k = 0; k < groupInputs.length; k++) {
+      groupArray.push(groupInputs[k]);
+    }
+
+    // Find Lowest Common Ancestor
+    var lca = findLCA(groupArray);
+
+    // Pick the first significant text element that acts as a header
+    // Skip labels that wrap radio inputs
+    var candidates = lca ? lca.querySelectorAll('p, span, div, label') : [];
+    for (var i = 0; i < candidates.length; i++) {
+      var candidate = candidates[i];
+      // Skip if this candidate wraps an input (option label)
+      if (candidate.tagName === 'LABEL' && candidate.querySelector('input')) continue;
+      // Skip if inside another label (nested option label)
+      if (candidate.closest('label') !== null && candidate.closest('label') !== candidate) continue;
+      // Check if it has meaningful text
+      if (candidate.textContent && candidate.textContent.trim().length > 10) {
+        anchor = candidate;
+        break;
+      }
+    }
+  }
+
+  // PRIORITY D: Use the first meaningful text in the block
+  if (!anchor) {
+    var textElements = logicalBlock.querySelectorAll('p, span, div, label');
+    for (var m = 0; m < textElements.length; m++) {
+      var el = textElements[m];
+      if (el.textContent && el.textContent.trim().length > 10) {
+        anchor = el;
+        break;
+      }
+    }
+  }
+
+  // 3. Prevent Double-Injections in the same block
+  if (logicalBlock.querySelector('.sp-sparkle-icon')) {
+    console.log('[SPARKLE] Block already has sparkle, skipping:', fieldName);
+    input.dataset.hasSparkleAdded = 'true';
+    return;
+  }
+
+  // 4. Inject
+  if (anchor) {
+    console.log('[SPARKLE] Injecting for', fieldName, 'anchor:', anchor.tagName, anchor.textContent.substring(0, 30));
+
+    // Get mapping state
+    var mapping = fieldMappings[fieldName];
+    var state = 'empty';
+    if (mapping) {
+      if (mapping.generating) state = 'generating';
+      else if (mapping.approvedValue) state = 'ready';
+    }
+
+    var icon = createSparkleIcon(state);
+    var tooltipText = fieldLabel || fieldName;
+    if (state === 'empty') tooltipText = 'Click to generate response';
+    else if (state === 'generating') tooltipText = 'Generating response...';
+    else if (state === 'ready') tooltipText = 'Click to fill';
+
+    var tooltip = document.createElement('div');
+    tooltip.className = 'sp-tooltip';
+    tooltip.textContent = tooltipText;
+    icon.appendChild(tooltip);
+    icon.title = tooltipText;
+
+    icon.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (state !== 'generating') {
+        openConversation(fieldName, input, icon, fieldLabel);
+      }
+    });
+
+    input._sparkleIcon = icon;
+    input._sparkleState = state;
+    fieldElements[fieldName] = input;
+
+    // FORCE the anchor to be an inline-flex container
+    // This keeps the sparkle on the same line as the text
+    anchor.style.setProperty('display', 'inline-flex', 'important');
+    anchor.style.setProperty('align-items', 'center', 'important');
+    anchor.style.setProperty('gap', '8px', 'important');
+    anchor.style.setProperty('width', 'auto', 'important'); // Prevents stretching to 100%
+    anchor.style.setProperty('max-width', '100%', 'important'); // Ensures it doesn't overflow
+    anchor.style.setProperty('white-space', 'nowrap', 'important'); // Prevents wrapping
+
+    // Create a wrapper span to hold the sparkle
+    var wrapper = document.createElement('span');
+    wrapper.className = 'schol-sparkle-container';
+    wrapper.appendChild(icon);
+
+    // Append sparkle wrapper to anchor - it will be the last child
+    anchor.appendChild(wrapper);
+
+    // Mark group as done
+    var groupName = input.getAttribute('name');
+    if (groupName) {
+      var groupInputs2 = document.querySelectorAll('input[name="' + groupName + '"]');
+      for (var n = 0; n < groupInputs2.length; n++) {
+        groupInputs2[n].dataset.hasSparkleAdded = 'true';
+      }
+    }
+    input.dataset.hasSparkleAdded = 'true';
+
+    console.log('[SPARKLE] Successfully added sparkle for:', fieldName);
+  } else {
+    console.log('[SPARKLE] No anchor found for:', fieldName);
+  }
+}
+
+/**
  * Initialize extension
  */
 function init() {
   console.log('Scholarships Plus: Initializing...');
 
+  // Check if document.body exists before trying to use it
   if (!document.body) {
     document.addEventListener('DOMContentLoaded', init);
     return;
@@ -1323,6 +1763,47 @@ function init() {
 
   // Wait longer for dynamic content (like Select2) to finish rendering
   setTimeout(processFields, 1500);
+
+  // Also try again later if first attempt doesn't find fields
+  setTimeout(function() {
+    var currentCount = document.querySelectorAll('.sp-sparkle-icon').length;
+    if (currentCount === 0) {
+      console.log('Scholarships Plus: Retrying field extraction...');
+      processFields();
+    }
+  }, 3000);
+
+  // Listen for auth token changes (user logs in)
+  chrome.storage.onChanged.addListener(function(changes, areaName) {
+    if (areaName === 'local' && changes.authToken) {
+      if (changes.authToken.newValue) {
+        // Token was set or updated
+        console.log('Scholarships Plus: Auth token detected, re-processing fields');
+        // Remove auth banner if exists
+        var authBanner = document.querySelector('.sp-auth-banner');
+        if (authBanner) authBanner.remove();
+        // Re-process fields with valid auth
+        processFields();
+      }
+    }
+  });
+
+  // Also check for auth token when tab becomes visible/active (in case user logged in from another tab)
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+      console.log('Scholarships Plus: Tab became visible, checking auth status');
+      getAuthToken(function(token) {
+        if (token) {
+          var authBanner = document.querySelector('.sp-auth-banner');
+          if (authBanner) {
+            console.log('Scholarships Plus: Found token, removing auth banner and re-processing');
+            authBanner.remove();
+            processFields();
+          }
+        }
+      });
+    }
+  });
 }
 
 try {
@@ -1334,5 +1815,87 @@ try {
 } catch (e) {
   console.error('Scholarships Plus: Error:', e);
 }
+
+/**
+ * Open general chat (not tied to a specific field)
+ */
+function openGeneralChat() {
+  closeConversation();
+
+  // Create a generic modal for general chat
+  conversationModal = createConversationModal('General Chat', 'How can I help you?', null, null, scholarshipTitle || 'Scholarship Application');
+  document.body.appendChild(conversationModal);
+
+  // Build application status
+  var statusMessage = buildApplicationStatus();
+
+  // Show greeting with status
+  var greeting = 'Hello! I\'m helping you with your application for **' + (scholarshipTitle || 'this scholarship') + '**.\n\n' + statusMessage + '\n\nHow can I help you?';
+
+  addMessageToConversation('agent', 'Assistant', greeting, false);
+
+  // Set currentFieldName to null to indicate general chat mode
+  currentFieldName = null;
+}
+
+/**
+ * Build application status message (what's filled/missing)
+ */
+function buildApplicationStatus() {
+  var allFields = Object.keys(fieldMappings);
+  var filledFields = [];
+  var emptyFields = [];
+
+  for (var i = 0; i < allFields.length; i++) {
+    var fieldName = allFields[i];
+    var mapping = fieldMappings[fieldName];
+
+    if (mapping && mapping.approvedValue && mapping.approvedValue.trim()) {
+      filledFields.push(mapping.fieldLabel || fieldName);
+    } else {
+      emptyFields.push(mapping.fieldLabel || fieldName);
+    }
+  }
+
+  var message = '';
+
+  if (filledFields.length > 0) {
+    message += '**Fields with responses:**\n';
+    for (var j = 0; j < Math.min(5, filledFields.length); j++) {
+      message += '✓ ' + filledFields[j] + '\n';
+    }
+    if (filledFields.length > 5) {
+      message += '... and ' + (filledFields.length - 5) + ' more\n';
+    }
+    message += '\n';
+  }
+
+  if (emptyFields.length > 0) {
+    message += '**Fields still needed:**\n';
+    for (var k = 0; k < Math.min(5, emptyFields.length); k++) {
+      message += '○ ' + emptyFields[k] + '\n';
+    }
+    if (emptyFields.length > 5) {
+      message += '... and ' + (emptyFields.length - 5) + ' more\n';
+    }
+  } else if (filledFields.length > 0) {
+    message += '**All fields have been completed!** 🎉\n';
+  } else {
+    message += '**No fields have been filled yet.**\n';
+  }
+
+  return message;
+}
+
+/**
+ * Listen for messages from popup
+ */
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  if (request.action === 'openGeneralChat') {
+    openGeneralChat();
+    sendResponse({ success: true });
+  }
+  return true;
+});
 
 console.log('Scholarships Plus: Content script loaded');

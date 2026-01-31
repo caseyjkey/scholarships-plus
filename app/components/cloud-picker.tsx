@@ -11,7 +11,9 @@ interface GooglePickerResponse {
 }
 
 interface CloudPickerProps {
+  clientId: string;
   onFilesSelected: (files: Array<{ id: string; name: string; mimeType: string }>) => void;
+  onFolderSelected?: (folderId: string, folderName: string) => void;
   onError?: (error: string) => void;
   className?: string;
   buttonText?: string;
@@ -25,7 +27,9 @@ interface CloudPickerProps {
  * from their Google Drive account. Requires a valid Google OAuth token.
  */
 export function CloudPicker({
+  clientId,
   onFilesSelected,
+  onFolderSelected,
   onError,
   className = "",
   buttonText = "Select from Google Drive",
@@ -103,20 +107,18 @@ export function CloudPicker({
       // Get access token from server
       const accessToken = await fetchAccessToken();
 
-      // Get Google Client ID from environment
-      const clientId = process.env.GOOGLE_CLIENT_ID;
+      // Use the clientId passed as prop
       if (!clientId) {
         throw new Error("Google Client ID is not configured");
       }
 
-      // Create Picker instance
+      // Create Picker instance with document views
       const picker = new window.google.picker.PickerBuilder()
         .addView(window.google.picker.ViewId.DOCS)
         .addView(window.google.picker.ViewId.DOCUMENTS)
         .addView(window.google.picker.ViewId.PRESENTATIONS)
         .addView(window.google.picker.ViewId.SPREADSHEETS)
         .setOAuthToken(accessToken)
-        .setDeveloperKey(clientId)
         .setCallback(pickerCallback)
         .build();
 
@@ -138,12 +140,20 @@ export function CloudPicker({
       switch (data.action) {
         case window.google.picker.Action.PICKED:
           if (data.docs && data.docs.length > 0) {
-            const files = data.docs.map((doc) => ({
-              id: doc.id,
-              name: doc.name,
-              mimeType: doc.mimeType,
-            }));
-            onFilesSelected(files);
+            const doc = data.docs[0];
+
+            // Check if it's a folder
+            if (doc.mimeType === 'application/vnd.google-apps.folder') {
+              onFolderSelected?.(doc.id, doc.name);
+            } else {
+              // It's a file
+              const files = data.docs.map((d) => ({
+                id: d.id,
+                name: d.name,
+                mimeType: d.mimeType,
+              }));
+              onFilesSelected(files);
+            }
           }
           break;
         case window.google.picker.Action.CANCEL:
@@ -156,7 +166,7 @@ export function CloudPicker({
           break;
       }
     },
-    [onFilesSelected]
+    [onFilesSelected, onFolderSelected]
   );
 
   const isReady = isApiLoaded && !isTokenLoading;

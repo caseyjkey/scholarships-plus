@@ -9,14 +9,21 @@ console.log('Scholarships Plus: Web app content script loaded');
 
 // Listen for messages from the web app via window.postMessage
 window.addEventListener('message', function(event) {
+  console.log('Scholarships Plus (webapp): Received message:', event.data);
+
   // Only accept messages from same origin
-  if (event.origin !== window.location.origin) return;
+  if (event.origin !== window.location.origin) {
+    console.log('Scholarships Plus (webapp): Message from different origin, ignoring:', event.origin);
+    return;
+  }
 
   if (event.data && event.data.type === 'SCHOLARSHIPS_PLUS_AUTH') {
     console.log('Scholarships Plus: Received auth token from web app');
 
     var token = event.data.token;
     var user = event.data.user;
+
+    console.log('Scholarships Plus: Token length:', token ? token.length : 0, 'User:', user);
 
     // Store token in chrome.storage.local
     chrome.storage.local.set(

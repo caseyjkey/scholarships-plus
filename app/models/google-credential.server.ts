@@ -2,6 +2,9 @@ import { prisma } from "~/db.server";
 import { encrypt, decrypt } from "~/lib/encryption.server";
 import type { GoogleAuthResult } from "~/lib/auth/google.server";
 import type { GoogleCredential } from "@prisma/client";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 
 // Validate required environment variables
 const requiredEnvVars = {
@@ -114,9 +117,23 @@ export async function linkGoogleAccount(
     Date.now() + (tokens.expires_in || 3600) * 1000
   );
 
-  // Require refresh token - don't link without it
-  if (!tokens.refresh_token) {
+  // Check if credential already exists
+  const existing = await prisma.googleCredential.findUnique({
+    where: { googleAccountId: profile.id },
+  });
+
+  // For new credentials, require refresh token
+  if (!existing && !tokens.refresh_token) {
     throw new Error("Google OAuth did not return a refresh token");
+  }
+
+  // Preserve existing refresh token if not provided (re-authorization case)
+  const refreshToken = tokens.refresh_token
+    ? encrypt(tokens.refresh_token)
+    : existing?.refreshToken;
+
+  if (!refreshToken) {
+    throw new Error("No refresh token available");
   }
 
   // Upsert credential
@@ -126,13 +143,12 @@ export async function linkGoogleAccount(
       googleAccountId: profile.id,
       email: profile.email,
       accessToken: encrypt(tokens.access_token),
-      refreshToken: encrypt(tokens.refresh_token),
+      refreshToken,
       expiresAt,
       userId,
     },
     update: {
       accessToken: encrypt(tokens.access_token),
-      refreshToken: encrypt(tokens.refresh_token),
       expiresAt,
       userId,
     },
@@ -196,4 +212,23 @@ export async function getAccessToken(
 ): Promise<string> {
   const credential = await getValidCredential(userId, googleAccountId);
   return decrypt(credential.accessToken);
+}
+
+/**
+ * Verify JWT token for extension authentication
+ * Returns userId if valid, null otherwise
+ */
+export function verifyExtensionToken(authHeader: string): string | null {
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authHeader.substring(7);
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    return decoded.userId;
+  } catch {
+    return null;
+  }
 }

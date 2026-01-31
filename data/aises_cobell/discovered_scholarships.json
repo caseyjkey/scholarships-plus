@@ -1,0 +1,48 @@
+{
+  "scholarships": [
+    {
+      "title": "ARDC Scholarship",
+      "organization": "AISES",
+      "position": 1,
+      "sourceUrl": "https://aises.org/scholarships/ardc-scholarship",
+      "applicationUrl": "https://webportalapp.com/sp/access_oasis",
+      "description": "Supports students in various STEM fields.",
+      "amount": "$5,000",
+      "deadline": "Not specified",
+      "status": "Open"
+    },
+    {
+      "title": "A.T. Anderson Scholarship",
+      "organization": "AISES",
+      "position": 2,
+      "sourceUrl": "https://aises.org/scholarships/at-anderson-scholarship",
+      "applicationUrl": "https://webportalapp.com/sp/access_oasis",
+      "description": "Recognizes students pursuing a degree in any STEM field.",
+      "amount": "$1,000 for Undergraduate | $2,000 for Graduate",
+      "deadline": "Not specified",
+      "status": "Open"
+    },
+    {
+      "title": "Cobell Undergraduate Scholarship",
+      "organization": "Cobell",
+      "position": 1,
+      "sourceUrl": "https://cobellscholar.org/our-scholarships/undergraduate",
+      "applicationUrl": "https://webportalapp.com/sp/access_oasis",
+      "description": "For American Indian and Alaska Native undergraduate students.",
+      "amount": "Up to $5,000",
+      "deadline": "March 31, 2025",
+      "status": "Open"
+    },
+    {
+      "title": "Cobell Graduate Scholarship",
+      "organization": "Cobell",
+      "position": 2,
+      "sourceUrl": "https://cobellscholar.org/our-scholarships/graduate",
+      "applicationUrl": "https://webportalapp.com/sp/access_oasis",
+      "description": "For American Indian and Alaska Native graduate students.",
+      "amount": "Up to $10,000",
+      "deadline": "March 31, 2025",
+      "status": "Open"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-01-28T10:04:05.235152",
+  "total": 11,
+  "success": 2,
+  "errors": 9,
+  "results": [
+    {
+      "title": "BIE Internship Funding for STEM Students 2025-2026",
+      "status": "error",
+      "error": "Timeout"
+    },
+    {
+      "title": "BIE Professional Development Funding for STEM Educators and Students 2025-2026",
+      "status": "error",
+      "error": "Timeout"
+    },
+    {
+      "title": "BIE Professional Examination Funding 2025-2026",
+      "status": "error",
+      "error": "Timeout"
+    },
+    {
+      "title": "Native Forward Community Impact Research Funding 2025-2026",
+      "status": "error",
+      "error": "Timeout"
+    },
+    {
+      "title": "Native Forward CPA Examination Funding 2025-2026",
+      "status": "error",
+      "error": "Timeout"
+    },
+    {
+      "title": "Miller Indigenous Economic Development Fellowship 2025-2026",
+      "status": "success",
+      "file": "scholarship_06_miller_indigenous_economic_development_fellowship_2025_2026.json"
+    },
+    {
+      "title": "Native Forward Scholars Fund 2026-2027 Scholarship Application",
+      "status": "error",
+      "error": "No valid JSON found",
+      "raw_file": "scholarship_07_raw_output.txt"
+    },
+    {
+      "title": "Native Forward Scholars Fund Internship Assistance Program 2025-2026",
+      "status": "error",
+      "error": "No valid JSON found",
+      "raw_file": "scholarship_08_raw_output.txt"
+    },
+    {
+      "title": "Native Forward Scholars Fund Professional Development Assistance Program 2025-2026",
+      "status": "error",
+      "error": "Timeout"
+    },
+    {
+      "title": "Native Forward Student Access Funding 2025-2026",
+      "status": "error",
+      "error": "Timeout"
+    },
+    {
+      "title": "Native Forward Student Relief Funding Spring 2025-2026",
+      "status": "success",
+      "file": "scholarship_11_native_forward_student_relief_funding_spring_2025_2026.json"
+    }
+  ]
+}

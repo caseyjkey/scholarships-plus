@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Scholarships Plus Assistant",
-  "version": "0.3.5",
+  "version": "0.7.0",
   "description": "Index scholarship applications and auto-fill with AI-approved responses",
   "permissions": [
     "activeTab",
@@ -24,16 +24,16 @@
         "https://app.smarterselect.com/*",
         "https://webportalapp.com/*",
         "https://www.nativeforward.org/*",
-        "http://localhost:3030/*",
         "file:///*"
       ],
-      "js": ["content.js"],
+      "js": ["content-v037.js"],
       "css": ["sparkle.css"],
       "run_at": "document_idle"
     },
     {
       "matches": ["http://localhost:3000/*", "http://localhost:3030/*", "https://localhost:3443/*"],
-      "js": ["webapp-content.js"],
+      "js": ["content-v037.js", "webapp-content.js"],
+      "css": ["sparkle.css"],
       "run_at": "document_idle"
     }
   ],

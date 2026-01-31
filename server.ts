@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
+import https from "node:https";
+
+// Load environment variables from .env file
+import dotenv from "dotenv";
+dotenv.config();
 
 import prom from "@isaacs/express-prometheus-middleware";
 import { createRequestHandler } from "@remix-run/express";
@@ -100,7 +105,45 @@ async function run() {
 
   app.all("*", remixHandler);
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 3030;
+  const httpsPort = process.env.HTTPS_PORT || 3443;
+
+  // Try to start HTTPS server in development for extension testing
+  // In production, __dirname is the project root. In dev build, it's build/ so go up one level.
+  const certDir = fs.existsSync(path.join(__dirname, "localhost.key"))
+    ? __dirname
+    : path.join(__dirname, "..");
+  const keyPath = path.join(certDir, "localhost.key");
+  const certPath = path.join(certDir, "localhost.crt");
+
+  if (process.env.NODE_ENV === "development" &&
+      fs.existsSync(keyPath) &&
+      fs.existsSync(certPath)) {
+    try {
+      const httpsOptions = {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath),
+      };
+
+      https.createServer(httpsOptions, app).listen(httpsPort, () => {
+        console.log(`✅ app ready (HTTPS): https://localhost:${httpsPort}`);
+        if (process.env.NODE_ENV === "development") {
+          broadcastDevReady(initialBuild);
+        }
+      });
+
+      // Also start HTTP server for non-extension requests
+      app.listen(port, () => {
+        console.log(`✅ app ready (HTTP): http://localhost:${port}`);
+      });
+      return;
+    } catch (error) {
+      console.warn(`⚠️  Could not start HTTPS server: ${error}`);
+      console.log(`   Falling back to HTTP only`);
+    }
+  }
+
+  // Fallback to HTTP only
   app.listen(port, () => {
     console.log(`✅ app ready: http://localhost:${port}`);
 

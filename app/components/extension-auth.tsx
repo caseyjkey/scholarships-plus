@@ -28,6 +28,12 @@ export function ExtensionAuth() {
         });
 
         if (!response.ok) {
+          if (response.status === 401) {
+            // User is not logged in - redirect to login page with extension flag
+            console.log("User not logged in, redirecting to login");
+            window.location.href = "/login?extension=true&redirect=" + encodeURIComponent(window.location.pathname + window.location.search);
+            return;
+          }
           console.error("Extension auth failed:", response.status);
           return;
         }

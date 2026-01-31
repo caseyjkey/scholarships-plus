@@ -28,9 +28,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     openAppBtn.onclick = handleLogin;
   }
 
-  // Open sidebar button
+  // Open sidebar button - now opens general chat
   openSidebarBtn.addEventListener('click', async () => {
-    await chrome.sidePanel.open();
+    // Send message to content script to open general chat
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab.id) {
+      chrome.tabs.sendMessage(tab.id, { action: 'openGeneralChat' });
+    }
     window.close();
   });
 

@@ -262,6 +262,15 @@
   white-space: pre-wrap !important;
 }
 
+.sp-message-content a {
+  color: #3b82f6 !important;
+  text-decoration: underline !important;
+}
+
+.sp-message-content a:hover {
+  color: #2563eb !important;
+}
+
 .sp-message-content p {
   margin: 0 0 8px 0 !important;
 }
@@ -456,4 +465,20 @@
   border-top-color: #1f2937 !important;
   z-index: 999999 !important;
   pointer-events: none !important;
+}
+
+/* Sparkle container - keeps sparkle inline with label text */
+.schol-sparkle-container {
+  display: inline-flex !important;
+  flex-shrink: 0 !important; /* Crucial: stops the icon from squishing */
+  margin-left: 8px !important;
+  vertical-align: middle !important;
+  line-height: 1 !important;
+  white-space: nowrap !important; /* Prevents sparkle from wrapping to second line */
+}
+
+/* Ensure the sparkle stays pinned to the center during rotation */
+.sp-sparkle-icon {
+  transform-origin: center center !important;
+  transform-box: fill-box !important;
 }

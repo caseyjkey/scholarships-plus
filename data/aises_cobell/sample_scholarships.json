@@ -1,0 +1,50 @@
+[
+  {
+    "title": "AISES National Conference Travel Scholarship",
+    "organization": "AISES",
+    "full_description": "Provides travel assistance to AISES members attending the AISES National Conference. Scholarships are awarded to eligible American Indian, Alaska Native, Native Hawaiian, Pacific Islander, and Indigenous persons of Canada who are current AISES members.",
+    "short_description": "Travel scholarship for AISES National Conference attendance",
+    "award_amount": "Variable",
+    "deadline": "September 15, 2025",
+    "eligibility": "Must be a current AISES member; Must be enrolled as a full-time student (undergraduate or graduate); Must have a minimum 3.0 GPA; Must attend the AISES National Conference; Tribal enrollment or documentation of Indigenous heritage required",
+    "required_documents": ["Tribal enrollment documentation", "Resume", "Transcript", "Conference registration confirmation"],
+    "application_url": "https://aises.awardspring.com/ACTIONS/Welcome.cfm",
+    "status": "Open"
+  },
+  {
+    "title": "Cobell Undergraduate Scholarship",
+    "organization": "Cobell",
+    "full_description": "The Cobell Undergraduate Scholarship is administered by the Indigenous Education, Inc. on behalf of the Cobell Scholarship family. This scholarship is available to American Indian and Alaska Native undergraduate students who are pursuing degrees in vocational, technical, or undergraduate programs.",
+    "short_description": "Undergraduate scholarship for American Indian and Alaska Native students",
+    "award_amount": "Up to $5,000",
+    "deadline": "March 31, 2025",
+    "eligibility": "Must be enrolled as a full-time undergraduate student; Must have a minimum 3.0 GPA; Must be an enrolled member of a federally recognized tribe; Must be pursuing a degree in an accredited institution",
+    "required_documents": ["Tribal enrollment documentation", "Transcript", "FAFSA", "Essay", "Letters of recommendation (2)"],
+    "application_url": "https://aises.awardspring.com/ACTIONS/Welcome.cfm",
+    "status": "Open"
+  },
+  {
+    "title": "Cobell Graduate Scholarship",
+    "organization": "Cobell",
+    "full_description": "The Cobell Graduate Scholarship is available to American Indian and Alaska Native graduate students pursuing advanced degrees. This scholarship supports graduate-level education including master's and doctoral programs.",
+    "short_description": "Graduate scholarship for advanced degree pursuit",
+    "award_amount": "Up to $10,000",
+    "deadline": "March 31, 2025",
+    "eligibility": "Must be enrolled as a full-time graduate student; Must have a minimum 3.0 GPA; Must be an enrolled member of a federally recognized tribe; Must be pursuing a graduate degree at an accredited institution",
+    "required_documents": ["Tribal enrollment documentation", "Transcript", "FAFSA", "Graduate program verification", "Letters of recommendation (3)", "Research statement"],
+    "application_url": "https://aises.awardspring.com/ACTIONS/Welcome.cfm",
+    "status": "Open"
+  },
+  {
+    "title": "Cobell Vocational Scholarship",
+    "organization": "Cobell",
+    "full_description": "The Cobell Vocational Scholarship is designed for American Indian and Alaska Native students pursuing vocational or technical education. This scholarship supports certificate and associate degree programs.",
+    "short_description": "Vocational/technical scholarship for certificate programs",
+    "award_amount": "Up to $3,000",
+    "deadline": "May 15, 2025",
+    "eligibility": "Must be enrolled in a vocational or technical program; Must have a minimum 2.5 GPA; Must be an enrolled member of a federally recognized tribe; Must be attending an accredited institution",
+    "required_documents": ["Tribal enrollment documentation", "Transcript", "Program verification", "Letters of recommendation (2)"],
+    "application_url": "https://aises.awardspring.com/ACTIONS/Welcome.cfm",
+    "status": "Open"
+  }
+]

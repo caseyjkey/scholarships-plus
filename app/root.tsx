@@ -12,9 +12,13 @@ import {
 
 import { getUser } from "~/session.server";
 import stylesheet from "~/tailwind.css";
+import { ExtensionAuth } from "~/components/extension-auth";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: stylesheet },
+  { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
+  { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
+  { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
   ...(cssBundleHref ? [{ rel: "stylesheet", href: cssBundleHref }] : []),
 ];
 
@@ -32,6 +36,7 @@ export default function App() {
         <Links />
       </head>
       <body className="h-full">
+        <ExtensionAuth />
         <Outlet />
         <ScrollRestoration />
         <Scripts />

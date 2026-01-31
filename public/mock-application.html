@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Scholarship Application</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .scholarship-header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .scholarship-header h1 {
+            color: #333;
+            margin: 0 0 10px 0;
+        }
+        .scholarship-header .amount {
+            color: #2e7d32;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        .form-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-section h2 {
+            color: #333;
+            margin-top: 0;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        .form-group label .required {
+            color: #d32f2f;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .form-group textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+        .form-group .hint {
+            font-size: 12px;
+            color: #777;
+            margin-top: 5px;
+        }
+        .button-group {
+            text-align: right;
+            margin-top: 20px;
+        }
+        .button-group button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        .button-group button.secondary {
+            background-color: #757575;
+        }
+        .button-group button:hover {
+            opacity: 0.9;
+        }
+        /* SmarterSelect-like styling */
+        .ss-field {
+            margin-bottom: 25px;
+        }
+        .ss-field .ss-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
+        }
+        .ss-field .ss-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .ss-field .ss-textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            min-height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="scholarship-header">
+        <h1>Test Community Leadership Scholarship</h1>
+        <div class="amount">$5,000</div>
+        <p><strong>Organization:</strong> Test Foundation</p>
+        <p><strong>Deadline:</strong> December 31, 2025</p>
+        <p><strong>Description:</strong> A scholarship for students who have demonstrated community leadership and service. We're looking for students who have made a meaningful impact in their communities through volunteer work and leadership roles.</p>
+    </div>
+
+    <form id="scholarship-form">
+        <!-- Personal Information Section -->
+        <div class="form-section">
+            <h2>Personal Information</h2>
+
+            <div class="form-group">
+                <label for="firstName">First Name <span class="required">*</span></label>
+                <input type="text" id="firstName" name="firstName" required>
+            </div>
+
+            <div class="form-group">
+                <label for="lastName">Last Name <span class="required">*</span></label>
+                <input type="text" id="lastName" name="lastName" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address <span class="required">*</span></label>
+                <input type="text" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Phone Number</label>
+                <input type="text" id="phone" name="phone">
+            </div>
+        </div>
+
+        <!-- Academic Information Section -->
+        <div class="form-section">
+            <h2>Academic Information</h2>
+
+            <div class="form-group">
+                <label for="school">School Name <span class="required">*</span></label>
+                <input type="text" id="school" name="school" required>
+            </div>
+
+            <div class="form-group">
+                <label for="gpa">What is your GPA? <span class="required">*</span></label>
+                <input type="number" id="gpa" name="gpa" step="0.01" min="0" max="4.0" required>
+                <div class="hint">On a 4.0 scale</div>
+            </div>
+
+            <div class="form-group">
+                <label for="classLevel">Class Level <span class="required">*</span></label>
+                <select id="classLevel" name="classLevel" required>
+                    <option value="">Select...</option>
+                    <option value="freshman">Freshman</option>
+                    <option value="sophomore">Sophomore</option>
+                    <option value="junior">Junior</option>
+                    <option value="senior">Senior</option>
+                    <option value="graduate">Graduate Student</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="major">Major/Field of Study <span class="required">*</span></label>
+                <input type="text" id="major" name="major" required>
+            </div>
+
+            <div class="form-group">
+                <label for="enrollment">Enrollment Status <span class="required">*</span></label>
+                <select id="enrollment" name="enrollment" required>
+                    <option value="">Select...</option>
+                    <option value="full-time">Full-time</option>
+                    <option value="part-time">Part-time</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Essay Questions Section - SmarterSelect style -->
+        <div class="form-section">
+            <h2>Essay Questions</h2>
+
+            <div class="ss-field">
+                <label class="ss-label" for="community-service">
+                    Tell us about your community service experience. How have you made a positive impact in your community?
+                    <span class="required">*</span>
+                </label>
+                <textarea id="community-service" name="community-service" class="ss-textarea" required></textarea>
+                <div class="hint">Minimum 250 words</div>
+            </div>
+
+            <div class="ss-field">
+                <label class="ss-label" for="leadership">
+                    List your leadership activities. Include any leadership roles in school, community, or work settings.
+                    <span class="required">*</span>
+                </label>
+                <textarea id="leadership" name="leadership" class="ss-textarea" required></textarea>
+                <div class="hint">Include role title, organization, and dates for each activity</div>
+            </div>
+
+            <div class="ss-field">
+                <label class="ss-label" for="goals">
+                    What are your academic and career goals? How will this scholarship help you achieve them?
+                    <span class="required">*</span>
+                </label>
+                <textarea id="goals" name="goals" class="ss-textarea" required></textarea>
+            </div>
+
+            <div class="ss-field">
+                <label class="ss-label" for="challenges">
+                    Describe a challenge you've faced and how you overcame it.
+                    <span class="required">*</span>
+                </label>
+                <textarea id="challenges" name="challenges" class="ss-textarea" required></textarea>
+            </div>
+        </div>
+
+        <!-- Submit Section -->
+        <div class="form-section">
+            <div class="button-group">
+                <button type="button" class="secondary" onclick="alert('Draft saved!')">Save Draft</button>
+                <button type="submit">Submit Application</button>
+            </div>
+        </div>
+    </form>
+
+    <script>
+        // Prevent actual form submission
+        document.getElementById('scholarship-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('Application submitted! (This is a mock form for testing)');
+        });
+
+        // Log page info for debugging
+        console.log('Mock Application Page Loaded');
+        console.log('URL:', window.location.href);
+        console.log('Form fields:', document.querySelectorAll('input, textarea, select').length);
+    </script>
+</body>
+</html>

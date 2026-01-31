@@ -1,0 +1,70 @@
+=== Raw Agent Output ===
+Length: 1586
+
+{"title": "Native Forward Student Relief Funding Spring 2025-2026", "full_description": "Native Forward Scholars Fund established the Student Relief Funding to assist Native students who are facing financial hardships and challenges by providing them with a one-time relief award. The fund will be utilized to help support students in emergency situations that includes, but is not limited to: Emergency Housing, Food Insecurity, Clothing or Personal Hygiene, Emergency Medical Costs, Emergency Childcare, Emergency Travel or Transportation, and Educational or Technology-Related Resources.", "short_description": null, "award_amount": null, "deadline": "February 27, 2026 at 11:59 PM(Midnight)", "eligibility": ["Be pursuing an undergraduate, graduate, or professional degree in any field of study.", "Be enrolled full-time in a U.S. accredited institution and provide proof of full-time enrollment.", "Be an enrolled member or descendant of a federally or state-recognized Tribe.", "Provide proof of enrollment via a copy of their Certificate Degree of Indian Blood, Tribal membership card, OR a letter of enrollment/descendancy from their Tribal enrollment office.", "Request only eligible expenses, which may include: Emergency Housing, Food Insecurity, Clothing or Personal Hygiene, Emergency Medical Costs, Emergency Childcare, Emergency Travel or Transportation, Educational or Technology-Related Resources."], "organization": "Native Forward Scholars Fund", "application_url": "https://app.smarterselect.com/programs/105569-Native-Forward-Scholars-Fund/print", "status": "Open"}
+
+=== Agent History ===
+
+--- Step 1 ---
+Action: N/A
+Output: N/A
+
+--- Step 2 ---
+Action: N/A
+Output: N/A
+
+--- Step 3 ---
+Action: N/A
+Output: N/A
+
+--- Step 4 ---
+Action: N/A
+Output: N/A
+
+--- Step 5 ---
+Action: N/A
+Output: N/A
+
+--- Step 6 ---
+Action: N/A
+Output: N/A
+
+--- Step 7 ---
+Action: N/A
+Output: N/A
+
+--- Step 8 ---
+Action: N/A
+Output: N/A
+
+--- Step 9 ---
+Action: N/A
+Output: N/A
+
+--- Step 10 ---
+Action: N/A
+Output: N/A
+
+--- Step 11 ---
+Action: N/A
+Output: N/A
+
+--- Step 12 ---
+Action: N/A
+Output: N/A
+
+--- Step 13 ---
+Action: N/A
+Output: N/A
+
+--- Step 14 ---
+Action: N/A
+Output: N/A
+
+--- Step 15 ---
+Action: N/A
+Output: N/A
+
+--- Step 16 ---
+Action: N/A
+Output: N/A

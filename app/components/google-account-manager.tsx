@@ -1,4 +1,4 @@
-import { Form, useFetcher, useNavigation } from "@remix-run/react";
+import { Form, useFetcher, useNavigation, useNavigate } from "@remix-run/react";
 import { useState, useEffect } from "react";
 
 interface GoogleAccount {
@@ -15,27 +15,22 @@ interface GoogleAccountManagerProps {
 export function GoogleAccountManager({ accounts }: GoogleAccountManagerProps) {
   const fetcher = useFetcher();
   const navigation = useNavigation();
+  const navigate = useNavigate();
   const [accountsList, setAccountsList] = useState<GoogleAccount[]>(accounts);
 
-  // Update local state when fetcher completes
+  // Update local state when fetcher completes and refresh page
   useEffect(() => {
     if (fetcher.data && fetcher.state === "idle") {
-      if (fetcher.formData?.get("action") === "unlink") {
-        const unlinkedId = fetcher.formData.get("accountId") as string;
-        setAccountsList((prev) => prev.filter((acc) => acc.id !== unlinkedId));
+      if (fetcher.data.success === true) {
+        // Successfully unlinked - reload the page to refresh data
+        window.location.reload();
       }
     }
-  }, [fetcher.data, fetcher.state, fetcher.formData]);
+  }, [fetcher.data, fetcher.state]);
 
   // Check if any unlink action is in progress
   const isUnlinking = navigation.state === "submitting" &&
     navigation.formData?.get("action") === "unlink";
-
-  const handleUnlink = (accountId: string) => {
-    if (!confirm("Are you sure you want to unlink this Google account?")) {
-      return;
-    }
-  };
 
   return (
     <div className="space-y-4">
@@ -134,14 +129,18 @@ export function GoogleAccountManager({ accounts }: GoogleAccountManagerProps) {
                 </div>
               </div>
               <fetcher.Form
-                method="delete"
-                action={`/api/google/accounts/${account.id}`}
-                onSubmit={() => handleUnlink(account.id)}
+                method="post"
+                action="/settings/google-accounts"
               >
-                <input type="hidden" name="action" value="unlink" />
+                <input type="hidden" name="intent" value="unlink" />
                 <input type="hidden" name="accountId" value={account.id} />
                 <button
                   type="submit"
+                  onClick={(e) => {
+                    if (!confirm("Are you sure you want to unlink this Google account?")) {
+                      e.preventDefault();
+                    }
+                  }}
                   disabled={isUnlinking}
                   className="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
