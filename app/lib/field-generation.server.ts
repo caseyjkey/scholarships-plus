@@ -45,7 +45,7 @@ async function preprocessObviousField(
     'email', 'e-mail', 'mail',
     'phone', 'mobile', 'telephone',
     'gpa', 'grade point',
-    'major', 'field of study', 'concentration',
+    'major', 'field of study', 'concentration', 'degree', 'pursuing',
     'year', 'grade level', 'class',
     'address', 'street', 'city', 'state', 'zip',
   ];
@@ -136,6 +136,19 @@ function extractValueFromChunks(chunks: any[], labelLower: string): string | nul
     for (const chunk of chunks) {
       const uniMatch = chunk.content.match(/(?:attend|at|:)\s*([A-Z][^\n,]+?(?:University|College|Institute|School)[^\n]*)/i);
       if (uniMatch) return uniMatch[1].trim();
+    }
+  }
+
+  // Degree/Major extraction
+  if (labelLower.includes('degree') || labelLower.includes('major') || labelLower.includes('pursuing')) {
+    for (const chunk of chunks) {
+      // Try to match degree patterns like "Bachelor of Science in Computer Science"
+      const degreeMatch = chunk.content.match(/(?:pursuing|studying|major|degree)[^a-zA-Z]*(?:a|an)?\s*(?:Bachelor'?s?|Master'?s?|PhD|Doctorate)?(?:\s*(?:of|in|Science|Arts))?\s*([A-Z][^\n.,]+?(?:\s+(?:in|of)\s+[A-Z][^\n.,]+)?)/i);
+      if (degreeMatch) return degreeMatch[1].trim();
+
+      // Try simpler pattern: "I am pursuing [degree]" or "My major is [major]"
+      const simpleMatch = chunk.content.match(/(?:pursuing|major|degree|studying)[^a-zA-Z]*(?:a|an)?\s*([A-Z][^\n.,]+?(?:\s+(?:in|of)\s+[A-Z][^\n.,]+)?)/i);
+      if (simpleMatch) return simpleMatch[1].trim();
     }
   }
 
