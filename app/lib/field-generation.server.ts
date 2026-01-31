@@ -38,14 +38,14 @@ async function preprocessObviousField(
 ): Promise<string | null> {
   const labelLower = fieldLabel.toLowerCase();
 
-  // Define obvious field patterns
+  // Define obvious field patterns - fields that can use vector similarity search from knowledge base
   const obviousFieldPatterns = [
     'first name', 'last name', 'full name', 'your name',
     'university', 'college', 'institution', 'school',
     'email', 'e-mail', 'mail',
     'phone', 'mobile', 'telephone',
     'gpa', 'grade point',
-    'major', 'field of study', 'concentration', 'degree', 'pursuing',
+    'major', 'field of study', 'concentration', 'degree', 'pursuing', 'program',
     'year', 'grade level', 'class',
     'address', 'street', 'city', 'state', 'zip',
   ];
@@ -85,7 +85,7 @@ async function preprocessObviousField(
       }
     }
 
-    // STAGE 2: No confirmed value found, search general knowledge base
+    // STAGE 2: No confirmed value found, search general knowledge base using vector similarity
     const knowledgeResults = await searchGlobalKnowledge(
       userId,
       `${fieldLabel} personal information`,
@@ -93,15 +93,19 @@ async function preprocessObviousField(
       5
     );
 
-    if (knowledgeResults.length === 0) {
-      return null; // No knowledge found, fall through to AI generation
-    }
+    if (knowledgeResults.length > 0) {
+      // Find the highest similarity result (results are sorted by similarity)
+      const bestMatch = knowledgeResults[0];
 
-    // Try to extract value using regex patterns based on field type
-    const extractedValue = extractValueFromChunks(knowledgeResults, labelLower);
-    if (extractedValue) {
-      console.log(`[Preprocess] Extracted value for "${fieldLabel}": ${extractedValue.substring(0, 50)}...`);
-      return extractedValue;
+      // If similarity is good enough (>0.5), use the knowledge content
+      if (bestMatch.similarity > 0.5) {
+        console.log(`[Preprocess] Found knowledge match for "${fieldLabel}": ${bestMatch.content.substring(0, 50)}... (similarity: ${bestMatch.similarity.toFixed(2)})`);
+
+        // For structured data like email, phone, etc., extract the specific value using regex
+        // For everything else, return the most relevant chunk content directly
+        const extractedValue = extractStructuredValue(bestMatch.content, labelLower);
+        return extractedValue || bestMatch.content;
+      }
     }
 
   } catch (error) {
@@ -112,56 +116,30 @@ async function preprocessObviousField(
 }
 
 /**
- * Extract value from knowledge chunks using regex patterns
+ * Extract structured values (email, phone, etc.) from content using regex
+ * This is only for truly structured data - everything else uses vector similarity
  */
-function extractValueFromChunks(chunks: any[], labelLower: string): string | null {
+function extractStructuredValue(content: string, labelLower: string): string | null {
   // Email extraction
   if (labelLower.includes('email')) {
-    for (const chunk of chunks) {
-      const emailMatch = chunk.content.match(/[\w.-]+@[\w.-]+\.\w+/);
-      if (emailMatch) return emailMatch[0];
-    }
+    const emailMatch = content.match(/[\w.-]+@[\w.-]+\.\w+/);
+    if (emailMatch) return emailMatch[0];
+  }
+
+  // Phone extraction
+  if (labelLower.includes('phone') || labelLower.includes('mobile')) {
+    const phoneMatch = content.match(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+    if (phoneMatch) return phoneMatch[0];
   }
 
   // GPA extraction
   if (labelLower.includes('gpa')) {
-    for (const chunk of chunks) {
-      const gpaMatch = chunk.content.match(/(\d\.?\d*)\s*gpa/i);
-      if (gpaMatch) return gpaMatch[1];
-    }
+    const gpaMatch = content.match(/(\d\.?\d*)\s*gpa/i);
+    if (gpaMatch) return gpaMatch[1];
   }
 
-  // University/College extraction
-  if (labelLower.includes('university') || labelLower.includes('college')) {
-    for (const chunk of chunks) {
-      const uniMatch = chunk.content.match(/(?:attend|at|:)\s*([A-Z][^\n,]+?(?:University|College|Institute|School)[^\n]*)/i);
-      if (uniMatch) return uniMatch[1].trim();
-    }
-  }
-
-  // Degree/Major extraction
-  if (labelLower.includes('degree') || labelLower.includes('major') || labelLower.includes('pursuing')) {
-    for (const chunk of chunks) {
-      // Try to match degree patterns like "Bachelor of Science in Computer Science"
-      const degreeMatch = chunk.content.match(/(?:pursuing|studying|major|degree)[^a-zA-Z]*(?:a|an)?\s*(?:Bachelor'?s?|Master'?s?|PhD|Doctorate)?(?:\s*(?:of|in|Science|Arts))?\s*([A-Z][^\n.,]+?(?:\s+(?:in|of)\s+[A-Z][^\n.,]+)?)/i);
-      if (degreeMatch) return degreeMatch[1].trim();
-
-      // Try simpler pattern: "I am pursuing [degree]" or "My major is [major]"
-      const simpleMatch = chunk.content.match(/(?:pursuing|major|degree|studying)[^a-zA-Z]*(?:a|an)?\s*([A-Z][^\n.,]+?(?:\s+(?:in|of)\s+[A-Z][^\n.,]+)?)/i);
-      if (simpleMatch) return simpleMatch[1].trim();
-    }
-  }
-
-  // Name extraction
-  if (labelLower.includes('name')) {
-    for (const chunk of chunks) {
-      const nameMatch = chunk.content.match(/(?:is|:)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/);
-      if (nameMatch) return nameMatch[1];
-    }
-  }
-
-  // Fallback: return first chunk's content
-  return chunks[0]?.content.split('\n')[0].trim() || null;
+  // No structured value found - return null so caller uses the raw content
+  return null;
 }
 
 /**
