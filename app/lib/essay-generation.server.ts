@@ -5,7 +5,7 @@
  */
 
 import { prisma } from "~/db.server";
-import { searchRelevantChunks } from "./pgvector.server";
+import { searchEssayChunks } from "./pgvector.server";
 import { getNextVersion, createDraft, type EssayDraftWithRelations } from "../models/essay.server";
 import type { Application, Scholarship } from "@prisma/client";
 
@@ -123,7 +123,7 @@ export async function generateEssay(
 
   try {
     // Step 1: Search for relevant chunks from user's past essays
-    const chunks = await searchRelevantChunks(application.userId, application.scholarship.title, {}, 10);
+    const chunks = await searchEssayChunks(application.userId, application.scholarship.title, {}, 10);
 
     if (chunks.length === 0) {
       throw new Error("No relevant past essays found. Please upload some essays first.");

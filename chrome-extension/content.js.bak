@@ -917,16 +917,8 @@ function openConversation(fieldName, input, icon, extractedLabel) {
       return;
     }
 
-    // Check if approvedValue is a placeholder or real value
-    var isPlaceholder = mapping && mapping.approvedValue && (
-      mapping.approvedValue.includes('[') ||
-      mapping.approvedValue.includes('Insert') ||
-      mapping.approvedValue.includes('Your answer') ||
-      mapping.approvedValue.length < 10
-    );
-
-    // If we have a real approvedValue (not a placeholder), show it
-    if (mapping && mapping.approvedValue && !isPlaceholder) {
+    // If we have context (previous approvedValue), show it
+    if (mapping && mapping.approvedValue) {
       addMessageToConversation('agent', 'Current response:', mapping.approvedValue);
     } else {
       // Send initial greeting to show application context
@@ -1909,22 +1901,6 @@ function init() {
       }
     }
   });
-
-  // Clean up any legacy title attributes that cause duplicate tooltips
-  // This fixes the issue where Chrome caches old content script versions
-  setTimeout(function() {
-    var sparkles = document.querySelectorAll('.sp-sparkle-icon');
-    var cleaned = 0;
-    sparkles.forEach(function(sp) {
-      if (sp.title) {
-        sp.removeAttribute('title');
-        cleaned++;
-      }
-    });
-    if (cleaned > 0) {
-      console.log('[CLEANUP] Removed title attributes from ' + cleaned + ' sparkles (fixes duplicate tooltips)');
-    }
-  }, 2000);
 
   // Also check for auth token when tab becomes visible/active (in case user logged in from another tab)
   document.addEventListener('visibilitychange', function() {

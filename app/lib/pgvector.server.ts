@@ -110,9 +110,9 @@ export async function storeEssayChunks(chunks: {
 }
 
 /**
- * Search for relevant chunks using pgvector similarity search
+ * Search essay chunks using pgvector similarity search
  */
-export async function searchRelevantChunks(
+export async function searchEssayChunks(
   userId: string,
   query: string,
   filters: {
@@ -121,25 +121,28 @@ export async function searchRelevantChunks(
   } = {},
   topK: number = 5
 ) {
-  // Generate query embedding
-  const queryEmbedding = await generateEmbedding(query);
+  // Truncate query to avoid token limit errors (max 8192 tokens for OpenAI)
+  const truncatedQuery = query.length > 5000 ? query.substring(0, 5000) : query;
+
+  // Generate query embedding (1536-dim for text-embedding-3-small)
+  const queryEmbedding = await generateEmbedding(truncatedQuery);
   const embeddingString = `[${queryEmbedding.join(",")}]`;
 
-  // Build pgvector query
+  // Build pgvector query using 1536-dimensional vectors (matching database schema)
   let sql = `
     SELECT
       ec.id,
       ec."essayId",
       ec."chunkIndex",
       ec.content,
-      ec.displayId,
+      ec."displayId",
       ec.metadata,
-      e.title as essay_title,
+      e."essayPrompt" as essay_title,
       e."wasAwarded",
-      1 - (ec.embedding <=> ${embeddingString}::vector(1024)) as similarity
+      1 - (ec.embedding <=> '${embeddingString}'::vector(1536)) as similarity
     FROM "EssayChunk" ec
     JOIN "Essay" e ON ec."essayId" = e.id
-    WHERE e."userId" = ${userId}::uuid
+    WHERE e."userId" = '${userId}'
   `;
 
   // Add optional filters
@@ -148,12 +151,12 @@ export async function searchRelevantChunks(
   }
 
   if (filters.minRelevance) {
-    sql += ` AND (1 - (ec.embedding <=> ${embeddingString}::vector(1024))) >= ${filters.minRelevance}`;
+    sql += ` AND (1 - (ec.embedding <=> '${embeddingString}'::vector(1536))) >= ${filters.minRelevance}`;
   }
 
   // Order by similarity and limit
   sql += `
-    ORDER BY ec.embedding <=> ${embeddingString}::vector(1024)
+    ORDER BY ec.embedding <=> '${embeddingString}'::vector(1536)
     LIMIT ${topK}
   `;
 
@@ -191,8 +194,25 @@ export async function searchGlobalKnowledge(
   const queryEmbedding = await generateEmbedding(query);
   const embeddingString = `[${queryEmbedding.join(",")}]`;
 
-  // Build pgvector query for GlobalKnowledge (1536-dim vectors)
-  let sql = `
+  // Build filter conditions - properly escape string values
+  const filterConditions: string[] = [];
+  if (filters.verified !== undefined) {
+    filterConditions.push(`AND gk.verified = ${filters.verified}`);
+  }
+  if (filters.type) {
+    // Escape single quotes in string values
+    const escapedType = filters.type.replace(/'/g, "''");
+    filterConditions.push(`AND gk.type = '${escapedType}'`);
+  }
+  if (filters.category) {
+    const escapedCategory = filters.category.replace(/'/g, "''");
+    filterConditions.push(`AND gk.category = '${escapedCategory}'`);
+  }
+
+  const filterClause = filterConditions.length > 0 ? filterConditions.join(' ') : '';
+
+  // Build the complete SQL query as a single string
+  const sql = `
     SELECT
       gk.id,
       gk.type,
@@ -201,28 +221,12 @@ export async function searchGlobalKnowledge(
       gk.content,
       gk.verified,
       gk.confidence,
-      1 - (gk.embedding <=> ${embeddingString}::vector(1536)) as similarity
+      1 - (gk.embedding <=> '${embeddingString}'::vector(1536)) as similarity
     FROM "GlobalKnowledge" gk
-    WHERE gk."userId" = ${userId}::uuid
+    WHERE gk."userId" = '${userId}'
       AND gk.embedding IS NOT NULL
-  `;
-
-  // Add optional filters
-  if (filters.verified !== undefined) {
-    sql += ` AND gk.verified = ${filters.verified}`;
-  }
-
-  if (filters.type) {
-    sql += ` AND gk.type = ${filters.type}`;
-  }
-
-  if (filters.category) {
-    sql += ` AND gk.category = ${filters.category}`;
-  }
-
-  // Order by similarity and limit
-  sql += `
-    ORDER BY gk.embedding <=> ${embeddingString}::vector(1536)
+      ${filterClause}
+    ORDER BY gk.embedding <=> '${embeddingString}'::vector(1536)
     LIMIT ${topK}
   `;
 
@@ -346,7 +350,7 @@ export async function generateRAGResponseWithCitations(options: {
   const { userId, query, topK = 5, awardedOnly = false } = options;
 
   // Step 1: Search for relevant chunks
-  const chunks = await searchRelevantChunks(userId, query, {
+  const chunks = await searchEssayChunks(userId, query, {
     awardedOnly,
   }, topK);
 

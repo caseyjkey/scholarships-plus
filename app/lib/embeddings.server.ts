@@ -152,67 +152,6 @@ export async function storeChunksWithEmbeddings(
 }
 
 /**
- * Search for relevant chunks using pgvector cosine similarity
- *
- * @param userId - User ID
- * @param query - Search query text
- * @param topK - Number of results to return
- * @returns Array of relevant chunks with similarity scores
- */
-export async function searchRelevantChunks(
-  userId: string,
-  query: string,
-  topK: number = 5
-): Promise<Array<{
-  id: string;
-  chunkId: number;
-  displayId: number;
-  content: string;
-  similarity: number;
-  metadata: any;
-}>> {
-  // Generate query embedding
-  const queryEmbedding = await generateEmbedding(query);
-  const embeddingString = `[${queryEmbedding.join(',')}]`;
-
-  try {
-    const results = await prisma.$queryRaw`
-      SELECT
-        ec.id,
-        ec."essayId",
-        ec."chunkIndex",
-        ec.content,
-        ec."displayId",
-        ec.metadata,
-        e."essayPrompt" as essay_title,
-        e."wasAwarded",
-        1 - (ec.embedding <=> ${embeddingString}::vector(1536)) as similarity
-      FROM "EssayChunk" ec
-      JOIN "Essay" e ON ec."essayId" = e.id
-      WHERE e."userId" = ${userId}
-      ORDER BY ec.embedding <=> ${embeddingString}::vector(1536)
-      LIMIT ${topK}
-    `;
-
-    return results.map((row: any, index: number) => ({
-      id: (row as any).id,
-      chunkId: (row as any).chunkIndex,
-      displayId: (row as any).displayId,
-      content: (row as any).content,
-      similarity: parseFloat((row as any).similarity),
-      metadata: {
-        ...(row as any).metadata,
-        essayTitle: (row as any).essay_title,
-        wasAwarded: (row as any).wasAwarded,
-      },
-    }));
-  } catch (error) {
-    console.error('❌ Error searching chunks:', error);
-    return [];
-  }
-}
-
-/**
  * Format retrieved chunks for LLM prompt with numbered sources
  *
  * @param chunks - Retrieved chunks from pgvector

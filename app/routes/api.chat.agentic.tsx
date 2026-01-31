@@ -1,7 +1,7 @@
 import { ActionFunctionArgs, json } from "@remix-run/node";
 import { requireUserId } from "~/session.server";
 import { prisma } from "~/db.server";
-import { searchRelevantChunks } from "~/lib/embeddings.server";
+import { searchEssayChunks } from "~/lib/pgvector.server";
 
 interface ChatContext {
   step: string;
@@ -135,7 +135,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
         // Process next requirement
         const nextReqText = requirements[nextReq];
-        const chunks = await searchRelevantChunks(userId, nextReqText, 3);
+        const chunks = await searchEssayChunks(userId, nextReqText, 3);
 
         let suggestedContent = '';
         if (chunks.length > 0) {
@@ -166,7 +166,7 @@ export async function action({ request }: ActionFunctionArgs) {
       // First time entering this step or user rejected
       if (Object.keys(completedRequirements).length === 0 && !('currentChunks' in context)) {
         const currentReqText = requirements[currentRequirement];
-        const chunks = await searchRelevantChunks(userId, currentReqText, 3);
+        const chunks = await searchEssayChunks(userId, currentReqText, 3);
 
         let suggestedContent = '';
         if (chunks.length > 0) {

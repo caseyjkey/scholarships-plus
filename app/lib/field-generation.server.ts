@@ -23,6 +23,49 @@ interface GenerateFieldResponseParams {
 }
 
 /**
+ * Extract clean search query from field label
+ * Removes form instructions, validation messages, and other noise
+ * Examples:
+ * - "Major/Field of Study - Please select from the list" -> "Major/Field of Study"
+ * - "Name of college or university you are attending." -> "Name of college or university"
+ * - "Degree being pursued *" -> "Degree being pursued"
+ */
+function extractCleanSearchQuery(fieldLabel: string): string {
+  let cleaned = fieldLabel;
+
+  // Remove common suffixes
+  const suffixesToRemove = [
+    ' - please select from the list',
+    ' - please select',
+    ' please select from the list',
+    ' please select',
+    ' - please select from the list\\.',
+    ' - please note.*',
+    ' - .* \\(if applicable\\)',
+    ' - .* \\(if different\\)',
+    ' \\*',
+    ' \\*\\s*$',
+    ' if not listed.*',
+    ' if other.*',
+    ' \\(.*\\)',  // Remove parenthetical instructions
+    ' \\s*-\\s*.*$',  // Remove everything after " - "
+  ];
+
+  for (const suffix of suffixesToRemove) {
+    const regex = new RegExp(suffix, 'gi');
+    cleaned = cleaned.replace(regex, '');
+  }
+
+  // Clean up extra whitespace and trailing punctuation
+  cleaned = cleaned
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[.,;:!]+$/, '');
+
+  return cleaned;
+}
+
+/**
  * Preprocessing for obvious fields using vector similarity
  *
  * Uses pgvector to find semantically similar field values:
@@ -61,10 +104,14 @@ async function preprocessObviousField(
   try {
     const { searchGlobalKnowledge } = await import("~/lib/pgvector.server");
 
+    // Extract clean search query from field label - remove form instructions and noise
+    // "Major/Field of Study - Please select from the list" -> "Major/Field of Study"
+    const cleanQuery = extractCleanSearchQuery(fieldLabel);
+
     // Search for verified entries similar to this field label
     const fieldSearchResults = await searchGlobalKnowledge(
       userId,
-      `${fieldLabel} field value`,
+      cleanQuery,
       { verified: true },
       3
     );
@@ -86,26 +133,31 @@ async function preprocessObviousField(
     }
 
     // STAGE 2: No confirmed value found, search general knowledge base using vector similarity
-    const knowledgeResults = await searchGlobalKnowledge(
-      userId,
-      `${fieldLabel} personal information`,
-      {},
-      5
-    );
+    // Try multiple query strategies to find relevant knowledge
+    const searchQueries = [
+      cleanQuery,  // Clean label: "Major/Field of Study"
+      `${cleanQuery} degree`,  // "Major/Field of Study degree"
+      `${cleanQuery} education`,  // "Major/Field of Study education"
+    ];
 
-    if (knowledgeResults.length > 0) {
-      // Find the highest similarity result (results are sorted by similarity)
-      const bestMatch = knowledgeResults[0];
+    let bestMatch = null;
+    let bestSimilarity = 0;
 
-      // If similarity is good enough (>0.5), use the knowledge content
-      if (bestMatch.similarity > 0.5) {
-        console.log(`[Preprocess] Found knowledge match for "${fieldLabel}": ${bestMatch.content.substring(0, 50)}... (similarity: ${bestMatch.similarity.toFixed(2)})`);
-
-        // For structured data like email, phone, etc., extract the specific value using regex
-        // For everything else, return the most relevant chunk content directly
-        const extractedValue = extractStructuredValue(bestMatch.content, labelLower);
-        return extractedValue || bestMatch.content;
+    for (const query of searchQueries) {
+      const results = await searchGlobalKnowledge(userId, query, {}, 5);
+      if (results.length > 0 && results[0].similarity > bestSimilarity) {
+        bestMatch = results[0];
+        bestSimilarity = results[0].similarity;
       }
+    }
+
+    if (bestMatch && bestSimilarity > 0.5) {
+      console.log(`[Preprocess] Found knowledge match for "${fieldLabel}": ${bestMatch.content.substring(0, 50)}... (similarity: ${bestSimilarity.toFixed(2)})`);
+
+      // For structured data like email, phone, etc., extract the specific value using regex
+      // For everything else, return the most relevant chunk content directly
+      const extractedValue = extractStructuredValue(bestMatch.content, labelLower);
+      return extractedValue || bestMatch.content;
     }
 
   } catch (error) {
@@ -186,11 +238,16 @@ export async function generateFieldResponse({
   }
 
   // Search user's knowledge base for relevant context
+  // Check BOTH GlobalKnowledge (for facts/values) and EssayChunk (for essay content)
   const context = await searchKnowledgeBase(userId, fieldLabel, fieldType);
 
+  // Also search GlobalKnowledge for explicit field values (more direct than essay chunks)
+  const globalContext = await searchGlobalKnowledgeBase(userId, fieldLabel, fieldType);
+
   // Add context to prompt if found
-  if (context) {
-    prompt = `${prompt}\n\nRelevant information from your profile:\n${context}`;
+  const allContext = [context, globalContext].filter(Boolean).join("\n\n");
+  if (allContext) {
+    prompt = `${prompt}\n\nRelevant information from your profile:\n${allContext}`;
   }
 
   try {
@@ -209,6 +266,8 @@ export async function generateFieldResponse({
 function buildEssayPrompt(fieldLabel: string, scholarship: any): string {
   return `Please write a response for the scholarship application field "${fieldLabel}" for ${scholarship.title} by ${scholarship.organization}.
 
+IMPORTANT: If provided with relevant information from your profile below, use that information as the primary source. Do not make up facts or information not present in your profile.
+
 Keep your response:
 - Personal and authentic
 - Under 500 words
@@ -220,7 +279,9 @@ Keep your response:
  * Build prompt for multiple choice fields
  */
 function buildChoicePrompt(fieldLabel: string, scholarship: any): string {
-  return `For the scholarship application field "${fieldLabel}" (${scholarship.title}), provide the most appropriate response based on your profile.
+  return `For the scholarship application field "${fieldLabel}" (${scholarship.title}), provide the most appropriate response.
+
+CRITICAL: If provided with relevant information from your profile below, prioritize that information over the scholarship name or any assumptions.
 
 Return just the value, no explanation.`;
 }
@@ -230,6 +291,8 @@ Return just the value, no explanation.`;
  */
 function buildTextPrompt(fieldLabel: string, scholarship: any): string {
   return `Please provide a brief, accurate response for "${fieldLabel}" for the ${scholarship.title} scholarship.
+
+CRITICAL: If provided with relevant information from your profile below, use that information. Do not guess or make up facts.
 
 Keep it concise and factual.`;
 }
@@ -254,7 +317,7 @@ async function searchKnowledgeBase(
       limit: 3,
     });
 
-    if (results.length === 0) {
+    if (!results || !Array.isArray(results) || results.length === 0) {
       return null;
     }
 
@@ -264,6 +327,53 @@ async function searchKnowledgeBase(
       .join("\n\n");
   } catch (error) {
     console.error("Knowledge base search failed:", error);
+    return null;
+  }
+}
+
+/**
+ * Search GlobalKnowledge for direct field values (more specific than essay chunks)
+ * This finds explicit facts like "Computer Science major" rather than essay content
+ */
+async function searchGlobalKnowledgeBase(
+  userId: string,
+  fieldLabel: string,
+  fieldType: string
+): Promise<string | null> {
+  try {
+    const { searchGlobalKnowledge } = await import("~/lib/pgvector.server");
+
+    // Try multiple search queries to find relevant entries
+    const searchQueries = [
+      fieldLabel,  // "Major/Field of Study"
+      `${fieldLabel} degree`,  // "Major/Field of Study degree"
+      `${fieldLabel} education`,  // "Major/Field of Study education"
+    ];
+
+    const allResults = [];
+    for (const query of searchQueries) {
+      const results = await searchGlobalKnowledge(userId, query, {}, 3);
+      allResults.push(...results);
+    }
+
+    if (allResults.length === 0) {
+      return null;
+    }
+
+    // Deduplicate by ID and sort by similarity
+    const seen = new Set();
+    const uniqueResults = allResults.filter((r) => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    }).sort((a, b) => b.similarity - a.similarity).slice(0, 5);
+
+    // Format results with titles and metadata for better AI understanding
+    return uniqueResults
+      .map((r) => `[${r.metadata.type || 'info'}] ${r.metadata.title || r.metadata.category || 'Entry'}: ${r.content}`)
+      .join("\n\n");
+  } catch (error) {
+    console.error("GlobalKnowledge search failed:", error);
     return null;
   }
 }
@@ -327,11 +437,9 @@ async function callGLM(prompt: string, maxTokens: number): Promise<string> {
   }
 
   const data = await response.json();
+  // Only use content - completely ignore reasoning_content to prevent thinking from showing
   const content = data.choices[0].message.content?.trim();
-  // With thinking mode disabled, reasoning_content should not be used
-  // but keep as fallback for compatibility
-  const reasoningContent = data.choices[0].message.reasoning_content?.trim();
-  return content || reasoningContent || "";
+  return content || "";
 }
 
 /**

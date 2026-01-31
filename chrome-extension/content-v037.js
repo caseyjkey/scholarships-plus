@@ -189,6 +189,55 @@ function findLCA(elements) {
 }
 
 /**
+ * Extract clean text from a label element, excluding form element content
+ * This prevents select option text from being included in the label
+ *
+ * For example, if the label contains:
+ *   "Major/Field of Study <select><option>CS</option><option>EE</option></select>"
+ * This returns: "Major/Field of Study"
+ */
+function getCleanLabelText(labelElement) {
+  if (!labelElement) return '';
+
+  // Clone the label to avoid modifying the original DOM
+  var clone = labelElement.cloneNode(true);
+
+  // Remove all form elements from the clone (select, input, textarea)
+  var formElements = clone.querySelectorAll('select, input, textarea, button');
+  for (var i = 0; i < formElements.length; i++) {
+    formElements[i].parentNode.removeChild(formElements[i]);
+  }
+
+  // Get text content from the cleaned clone
+  var text = clone.textContent.trim();
+
+  // Remove trailing asterisks and whitespace
+  text = text.replace(/\*+$/, '').trim();
+
+  // Remove common instruction suffixes that may have been in the label
+  var suffixesToRemove = [
+    ' - please select from the list\\s*$',
+    ' - please select\\s*$',
+    ' please select from the list\\s*$',
+    ' please select\\s*$',
+    ' - .*\\(if applicable\\)\\s*$',
+    ' - .*\\(if different\\)\\s*$',
+    ' if not listed.*\\s*$',
+    ' if other.*\\s*$',
+  ];
+
+  for (var i = 0; i < suffixesToRemove.length; i++) {
+    var regex = new RegExp(suffixesToRemove[i], 'gi');
+    text = text.replace(regex, '');
+  }
+
+  // Clean up extra whitespace and trailing punctuation
+  text = text.replace(/\s+/g, ' ').replace(/[.,;:!]+$/, '');
+
+  return text.trim();
+}
+
+/**
  * Find label for a form element using multi-stage approach:
  * 1. Direct Association (for attribute, wrapping label)
  * 2. Radio/Checkbox Grouping (LCA to find group question)
@@ -247,19 +296,33 @@ function findLabelForElement(element) {
                   continue;
                 }
 
+                // Get clean text excluding nested form elements
+                var candidateText = getCleanLabelText(candidate);
+
+                // Skip option labels (typically short: "Yes", "No", "Male", "Female")
+                // Question labels are usually longer and contain question words
+                if (candidateText.length < 15) {
+                  continue;
+                }
+
                 // Check if this candidate appears BEFORE the first radio input
                 var candidateRect = candidate.getBoundingClientRect();
                 var inputRect = firstInput.getBoundingClientRect();
 
                 // Use DOM position comparison rather than viewport coordinates
                 // Candidate must come before the input in DOM order OR be visually above
-                var position = document.compareDocumentPosition(candidate, firstInput);
-                var isBefore = !!(position & Node.DOCUMENT_POSITION_PRECEDING);
+                var position = candidate.compareDocumentPosition(firstInput);
+                var isBefore = !!(position & Node.DOCUMENT_POSITION_FOLLOWING);
 
                 if (isBefore || candidateRect.top < inputRect.top - 10) {
-                  var textLength = candidate.textContent.trim().length;
+                  var textLength = candidateText.length;
                   // Question labels are typically longer than option labels
-                  if (textLength > 10 && textLength > (label ? label.textContent.trim().length : 0)) {
+                  // Prefer labels with question marks or longer text
+                  var hasQuestionMark = candidateText.indexOf('?') !== -1;
+                  var priority = hasQuestionMark ? 1000 : textLength;
+                  var currentPriority = label ? ((label.textContent.indexOf('?') !== -1 ? 1000 : 0) + label.textContent.trim().length) : 0;
+
+                  if (priority > currentPriority) {
                     label = candidate;
                     source = 'radio-group-before-input';
                   }
@@ -358,6 +421,21 @@ function findLabelForElement(element) {
     }
   }
 
+  // STEP 4: FALLBACK - Use container element as label if it has meaningful text
+  // This handles forms where the label text is directly in the container (not in a <label> element)
+  if (!label) {
+    var container = element.closest('article, section, div.field, div.form-group, .question, .form-row');
+    if (container) {
+      // Get text content but exclude the form element's own options/text
+      var containerText = getCleanLabelText(container);
+      // Check if container has meaningful label-like text (not just whitespace or option text)
+      if (containerText && containerText.length > 5 && containerText.length < 200) {
+        label = container;
+        source = 'container-as-label';
+      }
+    }
+  }
+
   console.log('[FINDLABEL] Returning label:', !!label, 'source:', source, 'text:', label ? label.textContent.trim().substring(0, 40) : 'none');
   return { label: label, source: source };
 }
@@ -381,7 +459,7 @@ function extractFieldInfo(element, index) {
   var labelSource = result.source;
 
   if (label) {
-    info.fieldLabel = label.textContent.trim().replace(/\*$/, '').trim();
+    info.fieldLabel = getCleanLabelText(label);
   } else {
     info.fieldLabel = element.placeholder || element.name || element.id || 'Field ' + (index + 1);
   }
@@ -687,7 +765,7 @@ function addSparkleIcon(input, fieldName, labelElement, fieldLabel) {
   tooltip.className = 'sp-tooltip';
   tooltip.textContent = tooltipText;
   icon.appendChild(tooltip);
-  icon.title = tooltipText;
+  // Note: Don't set icon.title - it creates a duplicate native browser tooltip
 
   icon.addEventListener('click', function(e) {
     e.preventDefault();
@@ -695,7 +773,14 @@ function addSparkleIcon(input, fieldName, labelElement, fieldLabel) {
 
     if (state === 'generating') return;
 
-    // Open conversation for all states except generating
+    // If field has an approved value, fill it directly
+    var mapping = fieldMappings[fieldName];
+    if (mapping && mapping.approvedValue && state === 'ready') {
+      fillField(input, mapping.approvedValue);
+      return;
+    }
+
+    // Otherwise, open conversation for editing/generating
     openConversation(fieldName, input, icon, fieldLabel);
   });
 
@@ -835,10 +920,13 @@ function openConversation(fieldName, input, icon, extractedLabel) {
       return;
     }
 
-    // If we have context (previous approvedValue), show it
-    if (mapping && mapping.approvedValue) {
+    // Check if field is already filled (editing case)
+    var sparkleState = input._sparkleState;
+    if (mapping && mapping.approvedValue && sparkleState === 'filled') {
+      // Field is filled, user wants to edit - show current value
       addMessageToConversation('agent', 'Current response:', mapping.approvedValue);
     } else {
+      // No value yet, or user is generating for the first time
       // Send initial greeting to show application context
       sendInitialGreeting(fieldName, fieldLabel);
     }
@@ -1454,6 +1542,13 @@ function processFields() {
   var allLabels = document.querySelectorAll('label');
   allLabels.forEach(function(label) {
     delete label._addingSparkle;
+  });
+
+  // IMPORTANT: Clear data-sparkle-added attribute from all form elements
+  // This allows re-processing after login without missing fields
+  var allFormElements = document.querySelectorAll('[data-sparkle-added]');
+  allFormElements.forEach(function(el) {
+    el.removeAttribute('data-sparkle-added');
   });
 
   console.log('Scholarships Plus: Cleared ' + oldSparkles.length + ' old sparkles');

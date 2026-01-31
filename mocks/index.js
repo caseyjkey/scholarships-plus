@@ -1,5 +1,9 @@
 const { http, passthrough } = require("msw");
 const { setupServer } = require("msw/node");
+const EventEmitter = require("events");
+
+// Increase max listeners to prevent MSW warnings
+EventEmitter.defaultMaxListeners = 20;
 
 // put one-off handlers that don't really need an entire file to themselves here
 const miscHandlers = [

@@ -157,15 +157,29 @@ Please provide a helpful response that assists them with their application. Be c
       fieldType || "text"
     );
 
-    // Search user's knowledge base for relevant context
-    const knowledgeContext = await searchKnowledgeBase(
-      userId,
-      fieldLabel || fieldName,
-      fieldType || "text",
-      message
-    );
+    // Detect if this is a simple value (to avoid adding context that causes discussion)
+    const isSimpleValue = message.trim().length < 100 &&
+      !message.includes('?') &&
+      !message.includes('because') &&
+      !message.includes('since') &&
+      !message.includes('help me') &&
+      !message.includes('how to') &&
+      !message.includes('what should') &&
+      !message.toLowerCase().includes('more detail') &&
+      !message.toLowerCase().includes('elaborate');
 
-    // Add knowledge context to prompt if found
+    // Search user's knowledge base for relevant context
+    // BUT: Don't add it for simple values - it causes the AI to discuss instead of return the value
+    const knowledgeContext = (fieldType !== "select" && fieldType !== "radio" && !isSimpleValue)
+      ? await searchKnowledgeBase(
+          userId,
+          fieldLabel || fieldName,
+          fieldType || "text",
+          message
+        )
+      : null;
+
+    // Add knowledge context to prompt if found (and not a simple value)
     const finalPrompt = knowledgeContext
       ? `${prompt}\n\nRelevant information from your profile:\n${knowledgeContext}`
       : prompt;
@@ -211,6 +225,42 @@ function buildChatPrompt(
   context: string,
   fieldType: string
 ): string {
+  // Detect if user is providing a simple value (short, direct answer)
+  const isSimpleValue = userMessage.trim().length < 100 &&
+    !userMessage.includes('?') &&
+    !userMessage.includes('because') &&
+    !userMessage.includes('since') &&
+    !userMessage.includes('help me') &&
+    !userMessage.includes('how to') &&
+    !userMessage.includes('what should') &&
+    !userMessage.toLowerCase().includes('more detail') &&
+    !userMessage.toLowerCase().includes('elaborate');
+
+  // For select/radio fields or simple short values, just echo them back with minor formatting
+  if (fieldType === "select" || fieldType === "radio" || isSimpleValue) {
+    return `You are a form-filling assistant. The user just provided a SHORT, DIRECT answer to fill in a form field.
+
+User's answer: "${userMessage}"
+
+YOUR ONLY JOB: Return the cleaned-up value with proper formatting. NOTHING ELSE.
+
+STRICT RULES:
+1. Return ONLY the value itself
+2. NO explanations, NO context, NO suggestions
+3. NO phrases like "I see you want to use..." or "Here's the response..."
+4. NO questions, NO additional text whatsoever
+5. Minor formatting only: capitalize properly (e.g., "stanford" → "Stanford University")
+
+EXAMPLES:
+Input: "Computer Science" → Output: Computer Science
+Input: "stanford" → Output: Stanford University
+Input: "3.8" → Output: 3.8
+Input: "yes" → Output: Yes
+
+NOW OUTPUT ONLY THE VALUE FOR: "${userMessage}"`;
+  }
+
+  // For textarea (essays) and longer, more complex requests
   let basePrompt = "";
 
   switch (fieldType) {
@@ -227,18 +277,6 @@ Please provide an improved response that:
 - Maintains authenticity and personal voice
 - Is under 500 words
 - Is professional but conversational`;
-      break;
-
-    case "select":
-    case "radio":
-      basePrompt = `The user is working on a scholarship application and needs help selecting the best option.
-
-Context:
-${context}
-
-User's request: ${userMessage}
-
-Provide the most appropriate value based on their request. Return just the value, no explanation.`;
       break;
 
     default:
@@ -342,7 +380,7 @@ async function callGLM(prompt: string, maxTokens: number): Promise<string> {
         {
           role: "system",
           content:
-            "You are a helpful assistant that helps users refine scholarship application responses. Be authentic, concise, and professional. When the user provides feedback, incorporate it thoughtfully while maintaining their voice.",
+            "You are a scholarship application assistant. Follow the user's instructions EXACTLY. If asked to return only a value, return ONLY that value with no additional text, explanations, or questions. Be concise and follow the format specified in the instructions precisely.",
         },
         {
           role: "user",
@@ -350,7 +388,7 @@ async function callGLM(prompt: string, maxTokens: number): Promise<string> {
         },
       ],
       max_tokens: adjustedMaxTokens,
-      temperature: 0.5,
+      temperature: 0.3,
     }),
   });
 
@@ -359,11 +397,9 @@ async function callGLM(prompt: string, maxTokens: number): Promise<string> {
   }
 
   const data = await response.json();
+  // Only use content - completely ignore reasoning_content to prevent thinking from showing
   const content = data.choices[0].message.content?.trim();
-  // With thinking mode disabled, reasoning_content should not be used
-  // but keep as fallback for compatibility
-  const reasoningContent = data.choices[0].message.reasoning_content?.trim();
-  return content || reasoningContent || "";
+  return content || "";
 }
 
 /**
@@ -384,7 +420,7 @@ async function callOpenAI(prompt: string, maxTokens: number): Promise<string> {
         {
           role: "system",
           content:
-            "You are a helpful assistant that helps users refine scholarship application responses. Be authentic, concise, and professional. When the user provides feedback, incorporate it thoughtfully while maintaining their voice.",
+            "You are a scholarship application assistant. Follow the user's instructions EXACTLY. If asked to return only a value, return ONLY that value with no additional text, explanations, or questions. Be concise and follow the format specified in the instructions precisely.",
         },
         {
           role: "user",
@@ -392,7 +428,7 @@ async function callOpenAI(prompt: string, maxTokens: number): Promise<string> {
         },
       ],
       max_tokens: maxTokens,
-      temperature: 0.7,
+      temperature: 0.3,
     }),
   });
 

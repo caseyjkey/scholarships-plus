@@ -7,7 +7,7 @@
  */
 
 import {
-  searchRelevantChunks,
+  searchEssayChunks,
   formatChunksForPrompt,
   buildCitationSystemPrompt,
   generateRAGResponseWithCitations,
@@ -61,7 +61,7 @@ export async function queryRAG(options: RAGQueryOptions): Promise<RAGResponse> {
 
   try {
     // Step 1: Search pgvector for relevant chunks (with pgvector similarity)
-    const chunks = await searchRelevantChunks(userId, query, {}, maxSources);
+    const chunks = await searchEssayChunks(userId, query, {}, maxSources);
 
     if (chunks.length === 0) {
       return {
@@ -146,7 +146,7 @@ export async function searchKnowledge(
     const searchQuery = query || `${fieldLabel} ${fieldType} personal information`;
 
     // Search for relevant chunks
-    const chunks = await searchRelevantChunks(userId, searchQuery, {}, 3);
+    const chunks = await searchEssayChunks(userId, searchQuery, {}, 3);
 
     if (chunks.length === 0) {
       return null;
