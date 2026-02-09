@@ -14,11 +14,11 @@ enum UserRole {
 }
 
 model User {
-  id                String             @id @default(cuid())
-  email             String             @unique
-  role              UserRole           @default(STUDENT)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                String              @id @default(cuid())
+  email             String              @unique
+  role              UserRole            @default(STUDENT)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   password          Password?
   essays            Essay[]
@@ -30,6 +30,7 @@ model User {
   applicationContexts ApplicationContext[]
   fieldMappings     FieldMapping[]
   indexingSessions  IndexingSession[]
+  documents         Document[]
 }
 
 model GoogleCredential {
@@ -438,4 +439,23 @@ model IndexingSession {
   @@index([scholarshipId])
   @@index([userId])
   @@index([status])
+}
+
+// User documents - transcripts, tribal docs, references
+model Document {
+  id            String   @id @default(cuid())
+  userId        String
+  type          String   // "transcript", "tribal_doc", "general"
+  title         String
+  content       String   @db.Text  // Extracted text from file
+  extractedData Json?    // Type-specific structured data
+  source        String   @default("upload") // "upload", "google_drive"
+  sourceUrl     String?  // Google Drive URL if applicable
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([userId, createdAt])
 }
