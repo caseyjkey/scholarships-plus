@@ -333,6 +333,7 @@ model GlobalKnowledge {
   sourceEssay String?  // If from essay, which one
   confidence  Float    @default(0.5)  // How confirmed is this? 0-1
   verified    Boolean  @default(false)  // User explicitly confirmed this
+  lastVerified DateTime? // Track when user last confirmed this fact
 
   // For semantic search
   embedding   Unsupported("vector(1536)")?
@@ -350,6 +351,7 @@ model GlobalKnowledge {
   @@index([userId, category])
   @@index([userId, confidence])
   @@index([userId, verified])
+  @@index([userId, verified, lastVerified]) // Composite index for staleness tracking
 }
 
 // Application-specific context - isolated per application
