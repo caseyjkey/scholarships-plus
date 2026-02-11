@@ -7,48 +7,17 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script_stop: true
-          script: |
-            # Set up environment
-            cd /var/www/Scholarships-Plus
-
-            # Pull latest changes
-            echo "Pulling latest changes..."
-            git fetch origin
-            git reset --hard origin/main
-
-            # Install dependencies
-            echo "Installing dependencies..."
-            npm install --ci
-
-            # Generate Prisma Client
-            echo "Generating Prisma Client..."
-            npx prisma generate
-
-            # Run database migrations
-            echo "Running database migrations..."
-            npx prisma migrate deploy
-
-            # Build Remix app and server
-            echo "Building Remix app..."
-            npm run build
-
-            # Package Chrome extension for download
-            echo "Packaging Chrome extension..."
-            npm run build:extension
-
-            # Restart PM2 process
-            echo "Restarting PM2 process..."
-            pm2 restart scholarships-plus
-
-            # Show status
-            echo "Deployment complete. Status:"
-            pm2 list | grep scholarships-plus
+      - name: Deploy
+        run: |
+          cd /var/www/Scholarships-Plus
+          git fetch origin
+          git reset --hard origin/main
+          npm install --ci
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run build
+          npm run build:extension
+          pm2 restart scholarships-plus
+          pm2 list | grep scholarships-plus
