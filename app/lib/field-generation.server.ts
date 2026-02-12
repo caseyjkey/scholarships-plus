@@ -74,6 +74,58 @@ function extractCleanSearchQuery(fieldLabel: string): string {
  *
  * When user confirms a value via chat, it's saved for future vector matching.
  */
+/**
+ * Get all candidate values for a field (for showing options when uncertain)
+ */
+export async function getAllFieldCandidates(
+  userId: string,
+  fieldLabel: string
+): Promise<Array<{ value: string; confidence: number; verified: boolean; source: string }>> {
+  const labelLower = fieldLabel.toLowerCase();
+
+  // Normalize label for matching
+  const normalizeLabel = (label: string) => label.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalizedFieldLabel = normalizeLabel(fieldLabel);
+
+  // Get all facts that might match this field
+  const allFacts = await prisma.globalKnowledge.findMany({
+    where: {
+      userId,
+      type: "obvious_field",
+    },
+    select: { title: true, content: true, confidence: true, verified: true, source: true },
+  });
+
+  // Filter to matching fields
+  const matchingFacts = allFacts.filter(fact => {
+    const normalizedFactTitle = normalizeLabel(fact.title);
+    return normalizedFactTitle === normalizedFieldLabel ||
+           normalizedFactTitle.includes(normalizedFieldLabel) ||
+           normalizedFieldLabel.includes(normalizedFactTitle);
+  });
+
+  // Extract values and metadata
+  const candidates = matchingFacts
+    .map(fact => {
+      const valueMatch = fact.content.match(/^Value:\s*(.+)$/m);
+      if (!valueMatch) return null;
+
+      return {
+        value: valueMatch[1].trim(),
+        confidence: fact.confidence,
+        verified: fact.verified,
+        source: fact.source || "unknown",
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
+  // Sort by verified first, then by confidence
+  return candidates.sort((a, b) => {
+    if (a.verified !== b.verified) return a.verified ? -1 : 1;
+    return b.confidence - a.confidence;
+  });
+}
+
 async function preprocessObviousField(
   userId: string,
   fieldLabel: string,
@@ -100,26 +152,131 @@ async function preprocessObviousField(
     return null; // Not an obvious field, requires AI generation
   }
 
-  // STAGE 1: Vector search for previously confirmed values (verified: true)
+  // STAGE 1: Direct database lookup by exact title match (most reliable for obvious fields)
   try {
+    console.log(`[Preprocess] 🔍 Looking for obvious field: "${fieldLabel}" (userId: ${userId.substring(0, 8)}...)`);
+
+    // First try exact title match in database (fastest and most accurate)
+    const directMatch = await prisma.globalKnowledge.findFirst({
+      where: {
+        userId,
+        type: "obvious_field",
+        title: fieldLabel, // Exact match on field label
+      },
+      orderBy: [
+        { verified: "desc" }, // Prefer verified facts
+        { confidence: "desc" }
+      ],
+    });
+
+    if (directMatch && directMatch.content) {
+      const valueMatch = directMatch.content.match(/^Value:\s*(.+)$/m);
+      if (valueMatch) {
+        const value = valueMatch[1].trim();
+
+        // Check if there are multiple candidates for this field
+        const allCandidates = await getAllFieldCandidates(userId, fieldLabel);
+        const uniqueValues = new Set(allCandidates.map(c => c.value));
+
+        if (uniqueValues.size > 1) {
+          console.log(`[Preprocess] 🤔 Found ${uniqueValues.size} different values for "${fieldLabel}" - deferring to chat for user selection`);
+          console.log(`[Preprocess] Values: ${Array.from(uniqueValues).join(', ')}`);
+          return null; // Return null to fall through to chat API which will show options
+        }
+
+        console.log(`[Preprocess] ✅ Direct DB match for "${fieldLabel}": ${value}`);
+        return value;
+      }
+    }
+
+    console.log(`[Preprocess] ❌ No exact match for "${fieldLabel}", trying partial match...`);
+
+    // STAGE 1.5: Try partial match (field label contains title or vice versa)
+    // This handles cases where field label is "First Name:" but stored title is "First Name"
+    const allFacts = await prisma.globalKnowledge.findMany({
+      where: {
+        userId,
+        type: "obvious_field",
+      },
+      select: { title: true, content: true, verified: true, confidence: true },
+      orderBy: [
+        { verified: "desc" }, // Prefer verified facts
+        { confidence: "desc" }
+      ],
+    });
+
+    // Normalize both for comparison (remove whitespace, special chars)
+    const normalizeLabel = (label: string) => label.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalizedFieldLabel = normalizeLabel(fieldLabel);
+
+    const partialMatch = allFacts.find(fact => {
+      const normalizedFactTitle = normalizeLabel(fact.title);
+      return normalizedFactTitle === normalizedFieldLabel ||
+             normalizedFactTitle.includes(normalizedFieldLabel) ||
+             normalizedFieldLabel.includes(normalizedFactTitle);
+    });
+
+    if (partialMatch && partialMatch.content) {
+      const valueMatch = partialMatch.content.match(/^Value:\s*(.+)$/m);
+      if (valueMatch) {
+        const value = valueMatch[1].trim();
+
+        // Check if there are multiple candidates for this field
+        const allCandidates = await getAllFieldCandidates(userId, fieldLabel);
+        const uniqueValues = new Set(allCandidates.map(c => c.value));
+
+        if (uniqueValues.size > 1) {
+          console.log(`[Preprocess] 🤔 Found ${uniqueValues.size} different values for "${fieldLabel}" via partial match - deferring to chat`);
+          console.log(`[Preprocess] Values: ${Array.from(uniqueValues).join(', ')}`);
+          return null; // Defer to chat for user selection
+        }
+
+        console.log(`[Preprocess] ✅ Partial DB match for "${fieldLabel}" → "${partialMatch.title}": ${value}`);
+        return value;
+      }
+    }
+
+    console.log(`[Preprocess] ❌ No partial match found for "${fieldLabel}"`);
+
+    // STAGE 1.75: Check for multiple unverified candidates (show options to user)
+    const allCandidates = await getAllFieldCandidates(userId, fieldLabel);
+    const unverifiedCandidates = allCandidates.filter(c => !c.verified);
+
+    if (unverifiedCandidates.length > 1) {
+      console.log(`[Preprocess] 🤔 Found ${unverifiedCandidates.length} unverified candidates for "${fieldLabel}":`);
+      unverifiedCandidates.forEach(c => {
+        console.log(`  - "${c.value}" (confidence: ${c.confidence.toFixed(2)}, source: ${c.source})`);
+      });
+      console.log(`[Preprocess] ℹ️  AI should present these as options for user to choose`);
+      // Note: We continue with normal flow - the AI will see these in logs/context
+      // Future enhancement: Pass candidates directly to AI prompt for better UX
+    }
+
+    // STAGE 2.5: Vector search for previously confirmed values (verified: true)
+    // Only runs if direct match failed
     const { searchGlobalKnowledge } = await import("~/lib/pgvector.server");
 
     // Extract clean search query from field label - remove form instructions and noise
     // "Major/Field of Study - Please select from the list" -> "Major/Field of Study"
     const cleanQuery = extractCleanSearchQuery(fieldLabel);
 
-    // Search for verified entries similar to this field label
+    console.log(`[Preprocess] No direct match for "${fieldLabel}", trying vector search with query: "${cleanQuery}"`);
+
+    // Search for entries similar to this field label (prefer verified but include unverified)
     const fieldSearchResults = await searchGlobalKnowledge(
       userId,
       cleanQuery,
-      { verified: true },
-      3
+      {},  // No filter - will sort by relevance and verification status
+      5    // Get more results to find best match
     );
 
+    console.log(`[Preprocess] Vector search results: ${fieldSearchResults.length} entries, top similarity: ${fieldSearchResults[0]?.similarity.toFixed(2) || 'N/A'}`);
+
     // Find high-similarity match (>0.85 threshold for confident match)
+    // Prefer verified facts, but accept unverified if no verified match exists
     const confirmedMatch = fieldSearchResults.find(chunk =>
       chunk.similarity > 0.85 &&
-      chunk.metadata.verified === true
+      chunk.metadata.type === 'obvious_field'
     );
 
     if (confirmedMatch) {
@@ -127,12 +284,23 @@ async function preprocessObviousField(
       const valueMatch = confirmedMatch.content.match(/^Value:\s*(.+)$/m);
       if (valueMatch) {
         const value = valueMatch[1].trim();
-        console.log(`[Preprocess] Found confirmed value for "${fieldLabel}": ${value} (similarity: ${confirmedMatch.similarity.toFixed(2)})`);
+
+        // Check if there are multiple candidates for this field
+        const allCandidates = await getAllFieldCandidates(userId, fieldLabel);
+        const uniqueValues = new Set(allCandidates.map(c => c.value));
+
+        if (uniqueValues.size > 1) {
+          console.log(`[Preprocess] 🤔 Found ${uniqueValues.size} different values for "${fieldLabel}" via vector search - deferring to chat`);
+          console.log(`[Preprocess] Values: ${Array.from(uniqueValues).join(', ')}`);
+          return null; // Defer to chat for user selection
+        }
+
+        console.log(`[Preprocess] ✅ Found confirmed value for "${fieldLabel}": ${value} (similarity: ${confirmedMatch.similarity.toFixed(2)})`);
         return value;
       }
     }
 
-    // STAGE 2: No confirmed value found, search general knowledge base using vector similarity
+    // STAGE 3.5: No confirmed value found, search general knowledge base using vector similarity
     // Try multiple query strategies to find relevant knowledge
     const searchQueries = [
       cleanQuery,  // Clean label: "Major/Field of Study"
@@ -154,10 +322,25 @@ async function preprocessObviousField(
     if (bestMatch && bestSimilarity > 0.5) {
       console.log(`[Preprocess] Found knowledge match for "${fieldLabel}": ${bestMatch.content.substring(0, 50)}... (similarity: ${bestSimilarity.toFixed(2)})`);
 
-      // For structured data like email, phone, etc., extract the specific value using regex
-      // For everything else, return the most relevant chunk content directly
+      // For structured data like email, phone, name, etc., extract the specific value using regex
+      // If extraction fails for obvious fields, return null to fall through to AI generation
+      // This prevents returning essay chunks as simple field values
       const extractedValue = extractStructuredValue(bestMatch.content, labelLower);
-      return extractedValue || bestMatch.content;
+
+      if (extractedValue) {
+        return extractedValue;
+      }
+
+      // For obvious fields (first name, last name, email, phone, gpa), if we couldn't extract
+      // a clean value, return null instead of returning raw essay content
+      const isObviousField = ['first name', 'last name', 'full name', 'email', 'phone', 'gpa'].some(pattern => labelLower.includes(pattern));
+      if (isObviousField) {
+        console.log(`[Preprocess] Could not extract clean value for obvious field "${fieldLabel}", falling through to AI generation`);
+        return null;
+      }
+
+      // For non-obvious fields, return the best match content
+      return bestMatch.content;
     }
 
   } catch (error) {
@@ -168,29 +351,41 @@ async function preprocessObviousField(
 }
 
 /**
- * Extract structured values (email, phone, etc.) from content using regex
- * This is only for truly structured data - everything else uses vector similarity
+ * Extract structured values from content using regex
+ *
+ * NOTE: This function is now a fallback for legacy data.
+ * New essays should have facts pre-extracted via extractAndStoreFacts()
+ * which stores facts in "Value: <actual_value>" format with verified=true.
+ *
+ * For obvious fields, facts are now extracted during essay upload using LLM,
+ * so this function should rarely be needed anymore.
  */
 function extractStructuredValue(content: string, labelLower: string): string | null {
-  // Email extraction
+  // Handle "Value:" format from pre-extracted facts (primary case)
+  const valueMatch = content.match(/^Value:\s*(.+)$/m);
+  if (valueMatch) {
+    return valueMatch[1].trim();
+  }
+
+  // Email extraction (fallback for legacy chunks)
   if (labelLower.includes('email')) {
     const emailMatch = content.match(/[\w.-]+@[\w.-]+\.\w+/);
     if (emailMatch) return emailMatch[0];
   }
 
-  // Phone extraction
+  // Phone extraction (fallback for legacy chunks)
   if (labelLower.includes('phone') || labelLower.includes('mobile')) {
     const phoneMatch = content.match(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
     if (phoneMatch) return phoneMatch[0];
   }
 
-  // GPA extraction
+  // GPA extraction (fallback for legacy chunks)
   if (labelLower.includes('gpa')) {
     const gpaMatch = content.match(/(\d\.?\d*)\s*gpa/i);
     if (gpaMatch) return gpaMatch[1];
   }
 
-  // No structured value found - return null so caller uses the raw content
+  // No structured value found
   return null;
 }
 
@@ -211,6 +406,16 @@ export async function generateFieldResponse({
   if (preprocessedValue) {
     console.log(`Preprocessed value for field "${fieldLabel}": ${preprocessedValue.substring(0, 50)}...`);
     return preprocessedValue;
+  }
+
+  // Check if preprocessing returned null due to conflicts (multiple candidates)
+  // If so, throw error to prevent AI generation - let chat modal handle it
+  const allCandidates = await getAllFieldCandidates(userId, fieldLabel);
+  const uniqueValues = new Set(allCandidates.map(c => c.value));
+
+  if (uniqueValues.size > 1) {
+    console.log(`[FieldGen] 🤔 Multiple candidates (${uniqueValues.size}) found for "${fieldLabel}" - skipping AI generation`);
+    throw new Error(`CONFLICT:Multiple values found for ${fieldLabel}`);
   }
 
   // Build prompt based on field type

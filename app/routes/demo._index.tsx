@@ -38,6 +38,22 @@ export default function DemoPage() {
 
       {/* Main Form */}
       <main className="max-w-4xl mx-auto px-4 py-8">
+        {/* Extension Status Banner */}
+        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🔌</span>
+            <div className="flex-1">
+              <h3 className="font-semibold text-yellow-900">Extension Status</h3>
+              <p className="text-sm text-yellow-800 mt-1">
+                <span id="extensionStatus">Checking for extension...</span>
+              </p>
+              <div id="extensionNotInstalled" className="text-xs text-yellow-700 mt-2">
+                <strong>Not installed?</strong> <Link to="/extension" className="underline hover:text-yellow-900">Download the extension</Link> or load unpacked from the <code className="bg-yellow-100 px-1 rounded">chrome-extension/</code> folder in Chrome settings.
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white rounded-lg shadow-lg p-8">
           {/* Instructions Banner */}
           <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -253,6 +269,7 @@ export default function DemoPage() {
                   data-ai-field="leadership"
                   data-ai-type="essay"
                   data-ai-label="Leadership Experience"
+                  data-ai-prompt="Describe a leadership experience you've had and what you learned from it"
                 ></textarea>
                 <div className="text-xs text-gray-500 mt-1">
                   AI can help generate this from your past essays and experiences
@@ -276,6 +293,7 @@ export default function DemoPage() {
                   data-ai-field="goals"
                   data-ai-type="essay"
                   data-ai-label="Academic and Career Goals"
+                  data-ai-prompt="What are your academic and career goals?"
                 ></textarea>
                 <div className="text-xs text-gray-500 mt-1">
                   AI will reference your stated goals from your knowledge base
@@ -298,9 +316,131 @@ export default function DemoPage() {
                   data-ai-field="challenges"
                   data-ai-type="essay"
                   data-ai-label="Overcoming Challenges"
+                  data-ai-prompt="Describe a significant challenge you've overcome and how it affected you"
                 ></textarea>
                 <div className="text-xs text-gray-500 mt-1">
                   Optional - AI can help if you have relevant experiences
+                </div>
+              </div>
+
+              {/* Essay: Career Aspirations */}
+              <div className="mb-6">
+                <label htmlFor="careerAspirations" className="block text-sm font-medium text-gray-700 mb-2">
+                  4. How will this scholarship help you achieve your career aspirations?
+                  <span className="text-red-500">*</span>
+                  <span className="text-gray-500 text-xs ml-2">(750 words max)</span>
+                </label>
+                <textarea
+                  id="careerAspirations"
+                  name="careerAspirations"
+                  required
+                  rows="8"
+                  maxLength="7500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                  placeholder="Explain your career goals and how this scholarship will help you reach them..."
+                  data-ai-field="careerAspirations"
+                  data-ai-type="essay"
+                  data-ai-label="Career Aspirations"
+                  data-ai-prompt="How will this scholarship help you achieve your career aspirations?"
+                ></textarea>
+                <div className="text-xs text-gray-500 mt-1">
+                  Connect your goals to the scholarship's mission
+                </div>
+              </div>
+
+              {/* Essay: Community Impact */}
+              <div className="mb-6">
+                <label htmlFor="communityImpact" className="block text-sm font-medium text-gray-700 mb-2">
+                  5. Describe how you have made a positive impact on your community or school.
+                  <span className="text-red-500">*</span>
+                  <span className="text-gray-500 text-xs ml-2">(750 words max)</span>
+                </label>
+                <textarea
+                  id="communityImpact"
+                  name="communityImpact"
+                  required
+                  rows="8"
+                  maxLength="7500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                  placeholder="Share specific examples of how you've contributed to your community..."
+                  data-ai-field="communityImpact"
+                  data-ai-type="essay"
+                  data-ai-label="Community Impact"
+                  data-ai-prompt="Describe how you have made a positive impact on your community or school"
+                ></textarea>
+                <div className="text-xs text-gray-500 mt-1">
+                  Include specific examples and outcomes
+                </div>
+              </div>
+
+              {/* Essay: Academic Interests */}
+              <div className="mb-6">
+                <label htmlFor="academicInterests" className="block text-sm font-medium text-gray-700 mb-2">
+                  6. Describe your academic interests and how your chosen field of study will impact society.
+                  <span className="text-gray-500 text-xs ml-2">(750 words max)</span>
+                </label>
+                <textarea
+                  id="academicInterests"
+                  name="academicInterests"
+                  rows="8"
+                  maxLength="7500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                  placeholder="Discuss your academic passions and the broader impact of your field..."
+                  data-ai-field="academicInterests"
+                  data-ai-type="essay"
+                  data-ai-label="Academic Interests"
+                  data-ai-prompt="Describe your academic interests and how your chosen field of study will impact society"
+                ></textarea>
+                <div className="text-xs text-gray-500 mt-1">
+                  Optional - AI can reference your academic background
+                </div>
+              </div>
+
+              {/* Essay: Role Model */}
+              <div className="mb-6">
+                <label htmlFor="roleModel" className="block text-sm font-medium text-gray-700 mb-2">
+                  7. Who has been a significant role model or mentor in your life, and why?
+                  <span className="text-gray-500 text-xs ml-2">(500 words max)</span>
+                </label>
+                <textarea
+                  id="roleModel"
+                  name="roleModel"
+                  rows="6"
+                  maxLength="5000"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                  placeholder="Tell us about someone who has inspired you and influenced your path..."
+                  data-ai-field="roleModel"
+                  data-ai-type="essay"
+                  data-ai-label="Role Model"
+                  data-ai-prompt="Who has been a significant role model or mentor in your life, and why?"
+                ></textarea>
+                <div className="text-xs text-gray-500 mt-1">
+                  Optional - AI can help if this topic appears in your past essays
+                </div>
+              </div>
+
+              {/* Essay: Unique Perspective */}
+              <div className="mb-6">
+                <label htmlFor="uniquePerspective" className="block text-sm font-medium text-gray-700 mb-2">
+                  8. What unique perspective or life experience will you bring to our academic community?
+                  <span className="text-red-500">*</span>
+                  <span className="text-gray-500 text-xs ml-2">(500 words max)</span>
+                </label>
+                <textarea
+                  id="uniquePerspective"
+                  name="uniquePerspective"
+                  required
+                  rows="6"
+                  maxLength="5000"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                  placeholder="Share what makes your perspective unique and valuable..."
+                  data-ai-field="uniquePerspective"
+                  data-ai-type="essay"
+                  data-ai-label="Unique Perspective"
+                  data-ai-prompt="What unique perspective or life experience will you bring to our academic community?"
+                ></textarea>
+                <div className="text-xs text-gray-500 mt-1">
+                  Highlight your diverse background and experiences
                 </div>
               </div>
             </section>
@@ -405,22 +545,6 @@ export default function DemoPage() {
               </div>
             </section>
           </form>
-        </div>
-
-        {/* Extension Status Banner */}
-        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">🔌</span>
-            <div className="flex-1">
-              <h3 className="font-semibold text-yellow-900">Extension Status</h3>
-              <p className="text-sm text-yellow-800 mt-1">
-                <span id="extensionStatus">Checking for extension...</span>
-              </p>
-              <div id="extensionNotInstalled" className="text-xs text-yellow-700 mt-2">
-                <strong>Not installed?</strong> Load the unpacked extension from the <code className="bg-yellow-100 px-1 rounded">chrome-extension/</code> folder in Chrome settings.
-              </div>
-            </div>
-          </div>
         </div>
       </main>
 

@@ -536,6 +536,11 @@ function submitFieldsToAPI(fields, callback) {
   getAuthToken(function(token) {
     if (!token) {
       console.error('Scholarships Plus: No auth token found');
+      // Show visible debug info
+      var debugEl = document.createElement('div');
+      debugEl.style.cssText = 'position:fixed;top:50px;right:10px;background:red;color:white;padding:10px;z-index:999999;font-size:12px;';
+      debugEl.textContent = 'DEBUG: No auth token found!';
+      document.body.appendChild(debugEl);
       callback(null);
       return;
     }
@@ -577,6 +582,11 @@ function submitFieldsToAPI(fields, callback) {
     })
     .catch(function(error) {
       console.error('Scholarships Plus: API error:', error);
+      // Show visible debug info
+      var debugEl = document.createElement('div');
+      debugEl.style.cssText = 'position:fixed;top:50px;right:10px;background:orange;color:white;padding:10px;z-index:999999;font-size:12px;max-width:300px;';
+      debugEl.textContent = 'DEBUG: API error - ' + error.message;
+      document.body.appendChild(debugEl);
       callback(null);
     });
   });
@@ -828,7 +838,19 @@ function addSparkleIcon(input, fieldName, labelElement, fieldLabel) {
  */
 function updateSparkleForField(fieldName, approvedValue) {
   // Use stored element reference first, fall back to querySelector
-  var input = fieldElements[fieldName] || document.querySelector('[name="' + fieldName + '"], #' + fieldName);
+  var input = fieldElements[fieldName];
+  if (!input) {
+    // Try name selector first (works for all field names)
+    input = document.querySelector('[name="' + fieldName + '"]');
+    // If not found, try ID selector with proper escaping
+    if (!input) {
+      try {
+        input = document.querySelector('#' + CSS.escape(fieldName));
+      } catch (e) {
+        // Invalid selector, skip
+      }
+    }
+  }
   if (!input || !input._sparkleIcon) return;
 
   var icon = input._sparkleIcon;
@@ -849,7 +871,19 @@ function updateSparkleForField(fieldName, approvedValue) {
  */
 function updateSparkleState(fieldName, isGenerating) {
   // Use stored element reference first, fall back to querySelector
-  var input = fieldElements[fieldName] || document.querySelector('[name="' + fieldName + '"], #' + fieldName);
+  var input = fieldElements[fieldName];
+  if (!input) {
+    // Try name selector first (works for all field names)
+    input = document.querySelector('[name="' + fieldName + '"]');
+    // If not found, try ID selector with proper escaping
+    if (!input) {
+      try {
+        input = document.querySelector('#' + CSS.escape(fieldName));
+      } catch (e) {
+        // Invalid selector, skip
+      }
+    }
+  }
   if (!input || !input._sparkleIcon) return;
 
   var icon = input._sparkleIcon;
@@ -1282,19 +1316,26 @@ function callChatAPI(userMessage) {
       if (sendBtn) sendBtn.disabled = false;
 
       if (data.response) {
-        // In field-specific mode, show as suggestion with approval buttons
-        // In general chat mode, show as regular agent message
+        // In field-specific mode:
+        // - If canPropose is true, show as suggestion with approval buttons
+        // - If canPropose is false/missing, show as regular agent message (clarifying questions)
         if (currentFieldName) {
-          addMessageToConversation('suggestion', 'Suggested response:', data.response, true);
+          if (data.canPropose) {
+            // AI has enough info - show as proposal with action buttons
+            addMessageToConversation('suggestion', 'Proposed Response:', data.response, true);
 
-          // Store the suggested response for approval
-          if (!currentConversation) {
-            currentConversation = [];
+            // Store the suggested response for approval
+            if (!currentConversation) {
+              currentConversation = [];
+            }
+            currentConversation.push({
+              type: 'suggestion',
+              content: data.response,
+            });
+          } else {
+            // AI needs more info - show as regular message (asking clarifying questions)
+            addMessageToConversation('agent', 'Assistant', data.response, false);
           }
-          currentConversation.push({
-            type: 'suggestion',
-            content: data.response,
-          });
         } else {
           // General chat mode - just show the response
           addMessageToConversation('agent', 'Assistant', data.response, false);
@@ -1498,6 +1539,12 @@ function fillFieldWithAnimation(input, value) {
  * Show status banner
  */
 function showBanner(totalFields, readyCount, generatingCount) {
+  // Remove any existing Scholarships Plus banners first
+  var existingBanners = document.querySelectorAll('.sp-demo-banner');
+  for (var i = 0; i < existingBanners.length; i++) {
+    existingBanners[i].remove();
+  }
+
   var banner = document.createElement('div');
   banner.className = 'sp-demo-banner';
 
@@ -1593,7 +1640,19 @@ function processFields() {
     if (!fieldInfo || !fieldInfo.fieldName) return;
 
     // Use the stored element reference directly
-    var input = fieldInfo.element || document.querySelector('[name="' + fieldInfo.fieldName + '"], #' + fieldInfo.fieldName);
+    var input = fieldInfo.element;
+    if (!input) {
+      // Try name selector first (works for all field names)
+      input = document.querySelector('[name="' + fieldInfo.fieldName + '"]');
+      // If not found, try ID selector with proper escaping
+      if (!input) {
+        try {
+          input = document.querySelector('#' + CSS.escape(fieldInfo.fieldName));
+        } catch (e) {
+          // Invalid selector, skip
+        }
+      }
+    }
     if (!input) {
       console.log('[SPARKLE] Skipping - no input element found for:', fieldInfo.fieldName);
       return;

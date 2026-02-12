@@ -141,3 +141,112 @@ Use zai-mcp-server tools for visual analysis:
 - mcp__zai-mcp-server__diagnose_error_screenshot - Analyze error screenshots
 - mcp__zai-mcp-server__extract_text_from_screenshot - OCR for text extraction
 
+---
+
+# Extension AI Chat Goals
+
+## Overview
+The chrome extension AI chat assists students in crafting high-quality responses for scholarship application fields. The AI validates answers, asks clarifying questions when needed, and proposes responses when ready.
+
+## Model Configuration
+- **Primary Model**: `gpt-5-nano` (released August 2025, cost-effective: $0.05/M input, $0.40/M output)
+- **Temperature**: 0.1-0.3 for deterministic, consistent responses
+- **Response Format**: JSON mode for structured responses with `canPropose` flag
+
+## Core Workflow
+
+### 1. Initial Greeting
+When user opens chat for a field:
+- AI greets user with field context (field name, scholarship title)
+- Asks: "What would you like to say?"
+- Sets `canPropose: false` (greetings don't have proposals)
+
+### 2. User Response → AI Validation
+User types an answer (e.g., "Stanford" for First Name):
+- **AI validates answer** against field context
+- If answer is incomplete or invalid:
+  - Sets `canPropose: false`
+  - Asks clarifying questions
+  - Example: "Stanford is a university, not a first name. What's your actual first name?"
+- If answer is complete and valid:
+  - Sets `canPropose: true`
+  - Shows proposal with action buttons: "✨ Sounds good!" / "Let's change that."
+
+### 3. Proposal Acceptance/Modification
+When user sees a proposal:
+- **Accept**: Click "✨ Sounds good!" → autofills field, saves to knowledge base
+- **Reject**: Click "Let's change that." → user provides feedback, AI refines proposal
+- **Modify**: User types changes, AI generates new proposal
+
+## Key Behaviors
+
+### AI SHOULD Validate Answers
+- "Stanford" for First Name → Ask for actual first name ✅
+- "3.8" for First Name → Ask for name, not GPA ✅
+- "John" for First Name → Propose "John" with `canPropose: true` ✅
+
+### AI SHOULD Use Field Context
+The prompt MUST include:
+- Field label (e.g., "First Name")
+- Field type (text, textarea, select, number, date)
+- Scholarship title for context
+- Current application responses (for cross-field consistency)
+
+### AI SHOULD Ask Clarifying Questions
+When answer is unclear:
+- Ask specific questions to get needed information
+- Guide user toward a complete response
+- Don't make up information
+
+## Future Enhancements
+
+### Vector Database Similarity Search
+When user opens a field:
+1. AI searches vector database for similar past responses
+2. Presents options as clickable suggestions
+3. User can tap a suggestion → AI makes it a proposal
+4. User can accept or modify before accepting
+
+### Context from Current Application
+- AI should see all other field values in the current application
+- Use this for consistency (e.g., references to other answers)
+- Avoid asking for information already provided elsewhere
+
+### Iterative Refinement
+- User: "Make it more professional"
+- AI: Refines proposal with more formal language
+- User: "Add leadership experience"
+- AI: Integrates leadership angle into proposal
+
+## API Response Format
+
+### Success Response
+```json
+{
+  "response": "John",
+  "canPropose": true
+}
+```
+
+### Clarifying Question
+```json
+{
+  "response": "Could you clarify your first name? 'Stanford' appears to be a university name.",
+  "canPropose": false
+}
+```
+
+### Error Response
+```json
+{
+  "error": "Error message here"
+}
+```
+
+## Implementation Notes
+- Endpoint: `POST /api/extension/chat`
+- Authentication: JWT Bearer token from `/api/extension-auth/login`
+- Content Script: `chrome-extension/content-v037.js`
+- Backend Route: `app/routes/api.extension.chat.tsx`
+- Vector Search: `~/lib/rag.server.ts` (already implemented)
+

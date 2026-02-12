@@ -11,6 +11,8 @@ import { prisma } from "~/db.server";
 import { extractTextFromFile } from "~/lib/text-extraction.server";
 import { chunkEssay, storeChunksWithEmbeddings } from "~/lib/embeddings.server";
 import { computeSimilarity } from "~/lib/similarity.server";
+import { extractAndStoreFacts } from "~/lib/fact-extraction.server";
+import { generatePersonaProfileBackground } from "~/lib/persona-generation.server";
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -101,6 +103,21 @@ export async function action({ request }: ActionFunctionArgs) {
       // Don't fail the upload if chunking fails
       // Essay is still saved in database
     }
+
+    // Step 3.5: Extract structured facts using LLM and store in GlobalKnowledge
+    // This enables proper autofill for obvious fields like First Name, Email, etc.
+    extractAndStoreFacts(userId, essay.id, extractedText).catch((error) => {
+      console.error("Fact extraction failed (continuing anyway):", error);
+      // Don't fail the upload if fact extraction fails
+    });
+
+    // Step 3.6: Trigger persona profile generation in background
+    // Fire-and-forget pattern - don't block upload completion
+    // This analyzes all essays to build user's writing persona for synthesis
+    generatePersonaProfileBackground(userId).catch((error) => {
+      console.error("Persona generation failed (continuing anyway):", error);
+      // Don't fail the upload if persona generation fails
+    });
 
     // Step 4: Compute similarities in background
     // Don't wait for this to complete

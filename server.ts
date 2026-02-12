@@ -125,17 +125,42 @@ async function run() {
         cert: fs.readFileSync(certPath),
       };
 
-      https.createServer(httpsOptions, app).listen(httpsPort, () => {
-        console.log(`✅ app ready (HTTPS): https://localhost:${httpsPort}`);
-        if (process.env.NODE_ENV === "development") {
-          broadcastDevReady(initialBuild);
-        }
-      });
+      // Helper to start server with retry for port conflicts during hot reload
+      const startHttpsServer = (retryCount = 0): void => {
+        const httpsServer = https.createServer(httpsOptions, app);
 
-      // Also start HTTP server for non-extension requests
-      app.listen(port, () => {
-        console.log(`✅ app ready (HTTP): http://localhost:${port}`);
-      });
+        httpsServer.on('error', (err: any) => {
+          if (err.code === 'EADDRINUSE' && retryCount < 5) {
+            // Port is temporarily in use (likely from previous watch restart)
+            // Wait a bit and retry
+            const delay = (retryCount + 1) * 100;
+            console.log(`⏳ Port ${httpsPort} busy, retrying in ${delay}ms... (attempt ${retryCount + 1}/5)`);
+            setTimeout(() => startHttpsServer(retryCount + 1), delay);
+          } else {
+            console.error(`❌ Failed to start HTTPS server: ${err}`);
+            // Fall through to HTTP-only mode
+            app.listen(port, () => {
+              console.log(`✅ app ready (HTTP only): http://localhost:${port}`);
+              if (process.env.NODE_ENV === "development") {
+                broadcastDevReady(initialBuild);
+              }
+            });
+          }
+        });
+
+        httpsServer.listen(httpsPort, () => {
+          console.log(`✅ app ready (HTTPS): https://localhost:${httpsPort}`);
+          // Also start HTTP server for non-extension requests
+          app.listen(port, () => {
+            console.log(`✅ app ready (HTTP): http://localhost:${port}`);
+          });
+          if (process.env.NODE_ENV === "development") {
+            broadcastDevReady(initialBuild);
+          }
+        });
+      };
+
+      startHttpsServer();
       return;
     } catch (error) {
       console.warn(`⚠️  Could not start HTTPS server: ${error}`);

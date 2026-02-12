@@ -28,9 +28,9 @@
   align-items: flex-start !important;
 }
 
-/* Base sparkle icon styles - positioned absolutely, outside normal flow */
+/* Base sparkle icon styles - inline with label text (flexbox-based) */
 .sp-sparkle-icon {
-  position: absolute !important;
+  position: relative !important;
   width: 20px !important;
   height: 20px !important;
   min-width: 20px !important;
@@ -42,45 +42,59 @@
   transition: transform 0.2s ease !important;
   pointer-events: auto !important;
   flex-shrink: 0 !important;
-  display: block !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
-/* Default positioning - right side, vertically centered */
-.sp-sparkle-icon {
-  right: 12px !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
+/* Empty state - dim gray, no filter */
+.sp-sparkle-icon.sp-sparkle-empty {
+  opacity: 0.5 !important;
+}
+.sp-sparkle-icon.sp-sparkle-empty img {
+  filter: grayscale(100%) brightness(0.7) !important;
 }
 
-/* For textareas - top right corner INSIDE textarea bounds (offset from top edge) */
-.sp-input-wrapper:has(textarea) .sp-sparkle-icon {
-  top: 15px !important;
-  transform: none !important;
+/* Conflict state - gold, same as ready */
+.sp-sparkle-icon.sp-sparkle-conflict {
+  opacity: 1 !important;
+}
+.sp-sparkle-icon.sp-sparkle-conflict img {
+  filter: none !important; /* Show natural gold color */
 }
 
-/* For selects - position to avoid dropdown arrow, adjust vertical center */
-.sp-input-wrapper:has(select) .sp-sparkle-icon {
-  right: 20px !important;
-  top: calc(50% - 2px) !important;
-  transform: translateY(-50%) !important;
+/* Ready state - gold/yellow, full opacity */
+.sp-sparkle-icon.sp-sparkle-ready {
+  opacity: 1 !important;
+}
+.sp-sparkle-icon.sp-sparkle-ready img {
+  filter: none !important; /* Show natural gold color */
 }
 
-/* For number inputs - position to avoid spin buttons, adjust vertical center */
-.sp-input-wrapper:has(input[type="number"]) .sp-sparkle-icon,
-.sp-input-wrapper:has(input[role="spinbutton"]) .sp-sparkle-icon {
-  right: 40px !important;
-  top: calc(50% - 2px) !important;
-  transform: translateY(-50%) !important;
+/* Generating state - blue pulsing */
+.sp-sparkle-icon.sp-sparkle-generating {
+  animation: pulse 1s ease-in-out infinite !important;
+}
+.sp-sparkle-icon.sp-sparkle-generating img {
+  filter: hue-rotate(200deg) brightness(1.2) !important; /* Blue tint */
 }
 
-/* For date/month/time inputs - position to avoid calendar icon, adjust vertical center */
-.sp-input-wrapper:has(input[type="date"]) .sp-sparkle-icon,
-.sp-input-wrapper:has(input[type="month"]) .sp-sparkle-icon,
-.sp-input-wrapper:has(input[type="time"]) .sp-sparkle-icon {
-  right: 40px !important;
-  top: calc(50% - 2px) !important;
-  transform: translateY(-50%) !important;
+/* Filled state - gray after autofill (clickable to open conversation) */
+.sp-sparkle-icon.sp-sparkle-filled {
+  opacity: 0.5 !important; /* Dim the sparkle to show it's filled */
+  cursor: pointer !important;
+  background: transparent !important; /* Ensure background stays transparent */
 }
+.sp-sparkle-icon.sp-sparkle-filled img {
+  filter: grayscale(100%) !important; /* Turn gold to gray */
+}
+
+/* Hover effect - scale up */
+.sp-sparkle-icon:hover {
+  transform: scale(1.1) !important;
+}
+
+/* Legacy positioning styles for input-wrapper approach (not currently used) */
 
 /* Sparkle image */
 .sp-sparkle-icon img {
@@ -93,38 +107,14 @@
   display: block !important;
   object-fit: contain !important;
   overflow: hidden !important;
+  margin-bottom: 0.3rem !important;
 }
 
 /* Hover effect - scale up */
 .sp-sparkle-icon:hover {
-  transform: translateY(-50%) scale(1.1) !important;
-}
-
-/* For textareas, different hover transform */
-.sp-input-wrapper:has(textarea) .sp-sparkle-icon:hover {
   transform: scale(1.1) !important;
 }
 
-/* For selects - keep vertical center in hover */
-.sp-input-wrapper:has(select) .sp-sparkle-icon:hover {
-  top: calc(50% - 2px) !important;
-  transform: translateY(-50%) scale(1.1) !important;
-}
-
-/* For number inputs - keep vertical center in hover */
-.sp-input-wrapper:has(input[type="number"]) .sp-sparkle-icon:hover,
-.sp-input-wrapper:has(input[role="spinbutton"]) .sp-sparkle-icon:hover {
-  top: calc(50% - 2px) !important;
-  transform: translateY(-50%) scale(1.1) !important;
-}
-
-/* For date/month/time inputs - keep vertical center in hover */
-.sp-input-wrapper:has(input[type="date"]) .sp-sparkle-icon:hover,
-.sp-input-wrapper:has(input[type="month"]) .sp-sparkle-icon:hover,
-.sp-input-wrapper:has(input[type="time"]) .sp-sparkle-icon:hover {
-  top: calc(50% - 2px) !important;
-  transform: translateY(-50%) scale(1.1) !important;
-}
 
 /* Loading animation - pulse effect */
 .sp-sparkle-icon.sp-sparkle-loading,
@@ -152,14 +142,18 @@
   opacity: 1 !important;
 }
 
-/* Filled state - grey after autofill (clickable to open conversation) */
+/* Filled state - gray after autofill (clickable to open conversation) */
 .sp-sparkle-icon.sp-sparkle-filled {
-  opacity: 0.6 !important;
+  opacity: 0.5 !important; /* Dim the sparkle to show it's filled */
   cursor: pointer !important;
+  background: transparent !important; /* Ensure background stays transparent */
+}
+.sp-sparkle-icon.sp-sparkle-filled img {
+  filter: grayscale(100%) !important; /* Turn gold to gray */
 }
 
 .sp-sparkle-icon.sp-sparkle-filled:hover {
-  opacity: 0.8 !important;
+  opacity: 0.7 !important; /* Brighter on hover */
 }
 
 /* Conversation Modal */
@@ -477,8 +471,69 @@
   white-space: nowrap !important; /* Prevents sparkle from wrapping to second line */
 }
 
+/* Tooltip - hidden by default, shows on hover */
+.sp-tooltip {
+  position: absolute !important;
+  bottom: calc(100% + 8px) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  padding: 6px 10px !important;
+  background: rgba(31, 41, 55, 0.95) !important;
+  color: #fff !important;
+  font-size: 11px !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  white-space: nowrap !important;
+  border-radius: 4px !important;
+  z-index: 9999999 !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  transition: opacity 0.2s ease !important;
+  max-width: 200px !important;
+  text-align: center !important;
+  line-height: 1.3 !important;
+}
+
+/* Force tooltip to full opacity on hover, regardless of parent opacity */
+.sp-sparkle-icon:hover .sp-tooltip {
+  opacity: 1 !important;
+}
+
+/* Override parent opacity for tooltips on dimmed sparkles */
+.sp-sparkle-icon.sp-sparkle-empty .sp-tooltip,
+.sp-sparkle-icon.sp-sparkle-filled .sp-tooltip {
+  opacity: 0 !important; /* Hidden by default */
+}
+
+.sp-sparkle-icon.sp-sparkle-empty:hover .sp-tooltip,
+.sp-sparkle-icon.sp-sparkle-filled:hover .sp-tooltip {
+  opacity: 1 !important; /* Full opacity on hover, not dimmed */
+}
+
 /* Ensure the sparkle stays pinned to the center during rotation */
 .sp-sparkle-icon {
   transform-origin: center center !important;
   transform-box: fill-box !important;
+}
+
+/* Notification animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(400px);
+    opacity: 0;
+  }
 }

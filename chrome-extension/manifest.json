@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Scholarships Plus Assistant",
-  "version": "0.8.0",
+  "version": "1.1.9",
   "description": "Index scholarship applications and auto-fill with AI-approved responses",
   "permissions": [
     "activeTab",
@@ -26,13 +26,13 @@
         "https://www.nativeforward.org/*",
         "file:///*"
       ],
-      "js": ["content-v037.js"],
+      "js": ["history-modal.js", "style-settings.js", "progress-banner.js", "content-v037.js", "synthesis-integration.js"],
       "css": ["sparkle.css"],
       "run_at": "document_idle"
     },
     {
       "matches": ["http://localhost:3000/*", "http://localhost:3030/*", "https://localhost:3443/*"],
-      "js": ["content-v037.js", "webapp-content.js"],
+      "js": ["history-modal.js", "style-settings.js", "progress-banner.js", "content-v037.js", "synthesis-integration.js", "webapp-content.js"],
       "css": ["sparkle.css"],
       "run_at": "document_idle"
     }
@@ -52,7 +52,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/sparkle.svg"],
+      "resources": ["icons/sparkle.svg", "history-modal.js", "style-settings.js", "progress-banner.js", "synthesis-integration.js"],
       "matches": ["<all_urls>"]
     }
   ]

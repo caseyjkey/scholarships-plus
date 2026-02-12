@@ -53,6 +53,29 @@ export function Navbar({ userEmail, essayListItems = [], onLogout }: NavbarProps
             <span className="hidden sm:inline text-sm font-medium">Essays</span>
           </Link>
 
+          {/* Extension Button - Download Icon + Text */}
+          <Link
+            to="/extension"
+            className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-gray-200 hover:bg-gray-700 hover:text-white transition-colors min-h-[44px]"
+            aria-label="Get browser extension"
+          >
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="1.5"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+              />
+            </svg>
+            <span className="hidden sm:inline text-sm font-medium">Extension</span>
+          </Link>
+
           {/* Mobile Menu Button (hamburger) */}
           <button
             type="button"
@@ -145,6 +168,14 @@ export function Navbar({ userEmail, essayListItems = [], onLogout }: NavbarProps
                   className="block px-4 py-3 rounded-lg text-gray-900 hover:bg-gray-100 font-medium min-h-[48px] flex items-center"
                 >
                   📋 Applications
+                </Link>
+
+                <Link
+                  to="/extension"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block px-4 py-3 rounded-lg text-gray-900 hover:bg-gray-100 font-medium min-h-[48px] flex items-center"
+                >
+                  📥 Extension
                 </Link>
 
                 <Link

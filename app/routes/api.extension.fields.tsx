@@ -338,11 +338,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 },
               });
 
+              // Save essay responses to history
+              const isEssayField = field.fieldType === 'textarea' || generatedValue.length > 100;
+              if (isEssayField) {
+                const { saveSynthesizedResponse } = await import("~/lib/synthesis.server");
+                await saveSynthesizedResponse({
+                  userId,
+                  fieldId: field.fieldName,
+                  fieldLabel: field.fieldLabel,
+                  content: generatedValue,
+                  promptType: 'ai_generated',
+                  styleUsed: 'automatic',
+                  sources: [],
+                  wordCount: generatedValue.split(/\s+/).length,
+                });
+              }
+
               console.log(`Generated response for field: ${field.fieldName}`);
             } catch (error) {
-              console.error(`Failed to generate for field ${field.fieldName}:`, error);
+              const errorMessage = error instanceof Error ? error.message : String(error);
 
-              // Mark generating as false even on failure
+              // Check if this is a conflict error (multiple candidates)
+              if (errorMessage.startsWith('CONFLICT:')) {
+                console.log(`⚠️  ${field.fieldName}: ${errorMessage.replace('CONFLICT:', '')} - will present options in chat`);
+              } else {
+                console.error(`Failed to generate for field ${field.fieldName}:`, error);
+              }
+
+              // Mark generating as false, leave approvedValue null
+              // This will cause sparkle to open chat modal for manual resolution
               await prisma.fieldMapping.update({
                 where: { id: field.id },
                 data: { generating: false },
@@ -355,12 +379,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }, 100); // Small delay to ensure response is sent first
     }
 
-    // Return formatted response
-    const responseMappings = mappings.map((mapping) => ({
-      fieldName: mapping.fieldName,
-      approvedValue: mapping.approvedValue,
-      generating: mapping.generating,
-    }));
+    // Return formatted response with conflict detection
+    const { getAllFieldCandidates } = await import("~/lib/field-generation.server");
+
+    const responseMappings = await Promise.all(
+      mappings.map(async (mapping) => {
+        // Check if this field has conflicts (multiple unverified candidates)
+        const candidates = await getAllFieldCandidates(userId, mapping.fieldLabel);
+        const unverifiedCandidates = candidates.filter(c => !c.verified);
+        const hasConflict = unverifiedCandidates.length > 1;
+
+        return {
+          fieldName: mapping.fieldName,
+          approvedValue: mapping.approvedValue,
+          generating: mapping.generating,
+          hasConflict: hasConflict && !mapping.approvedValue, // Only flag conflict if no approved value
+        };
+      })
+    );
 
     return json({
       scholarshipId: scholarship.id,

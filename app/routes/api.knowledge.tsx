@@ -2,17 +2,23 @@
  * API Routes for Global Knowledge Management
  *
  * These endpoints allow managing the user's global knowledge base:
- * - Retrieving knowledge with optional filtering
- * - Adding new knowledge items
- * - Updating/verifying knowledge (during interview)
- * - Semantic search for similar knowledge
- * - Managing application-specific context
+ * - GET: Retrieving knowledge with optional filtering
+ * - POST: Adding new knowledge items
+ * - PUT: Updating/verifying knowledge (during interview)
+ * - DELETE: Removing knowledge items
+ * - PATCH: Re-extracting facts from essays (action: "reextract-facts")
+ *
+ * Fact Extraction:
+ * When essays are uploaded, structured facts (first name, email, GPA, etc.)
+ * are automatically extracted using LLM and stored in GlobalKnowledge with
+ * the format "Value: <actual_value>" for efficient autofill.
  */
 
 import { ActionFunctionArgs, LoaderFunctionArgs, json } from "@remix-run/node";
 import { requireUserId } from "~/session.server";
 import { prisma } from "~/db.server";
 import OpenAI from "openai";
+import { reextractFactsForUser } from "~/lib/fact-extraction.server";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -184,6 +190,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { status: 500 }
       );
     }
+  }
+
+  // PATCH: Re-extract facts from all essays (useful after data import or code changes)
+  if (method === "PATCH") {
+    const body = await request.json();
+    const { action: actionType } = body;
+
+    if (actionType === "reextract-facts") {
+      try {
+        // Run re-extraction in background
+        reextractFactsForUser(userId).catch((error) => {
+          console.error("Background re-extraction failed:", error);
+        });
+
+        return json({
+          success: true,
+          message: "Started fact re-extraction from all essays. This may take a few minutes.",
+        });
+      } catch (error: any) {
+        return json(
+          { error: "Failed to start re-extraction", details: error.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    return json({ error: "Unknown PATCH action" }, { status: 400 });
   }
 
   return json({ error: "Method not allowed" }, { status: 405 });
