@@ -11,6 +11,7 @@ jobs:
     steps:
       - name: Deploy
         run: |
+          export PATH=/home/ec2-user/.bun/bin:$PATH
           cd /var/www/Scholarships-Plus
           git fetch origin
           git reset --hard origin/main
