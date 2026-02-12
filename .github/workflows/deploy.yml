@@ -14,10 +14,10 @@ jobs:
           cd /var/www/Scholarships-Plus
           git fetch origin
           git reset --hard origin/main
-          npm install --ci
-          npx prisma generate
-          npx prisma migrate deploy
-          npm run build
-          npm run build:extension
+          bun install --frozen-lockfile
+          bunx prisma generate
+          bunx prisma migrate deploy
+          bun run build
+          bun run build:extension
           pm2 restart scholarships-plus
           pm2 list | grep scholarships-plus
