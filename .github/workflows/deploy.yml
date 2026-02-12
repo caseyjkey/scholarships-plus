@@ -13,8 +13,7 @@ jobs:
         run: |
           export PATH=/home/ec2-user/.bun/bin:$PATH
           cd /var/www/Scholarships-Plus
-          git fetch origin
-          git reset --hard origin/main
+          git pull origin main
           bun install --frozen-lockfile
           bunx prisma generate
           bunx prisma migrate deploy
